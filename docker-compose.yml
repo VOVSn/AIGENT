@@ -15,18 +15,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s # Give it some time to start before first healthcheck
+      start_period: 10s
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: aigent_rabbitmq
-    hostname: rabbitmq # Essential for Celery connection string
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
-      - "${RABBITMQ_PORT}:5672"   # AMQP port
-      - "15672:15672" # Management plugin UI port (access via http://localhost:15672)
+      - "${RABBITMQ_PORT}:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/
     healthcheck:
@@ -50,19 +50,30 @@ services:
       retries: 5
       start_period: 10s
 
+  # --- MODIFIED backend SERVICE ---
   backend:
     build: ./backend
     container_name: aigent_backend
     command: >
       sh -c "
+        echo 'Backend container starting...' &&
         echo 'Waiting for PostgreSQL to be healthy...' &&
-        # Simple wait loop or use a wait-for-it script
-        # For now, depends_on with service_healthy should mostly cover this
-        python manage.py migrate &&
+        # The 'depends_on' with 'condition: service_healthy' for 'db'
+        # should ensure DB is ready, but an explicit wait can be added if needed.
+        # For example, using a wait-for-it.sh script.
+        # For now, relying on depends_on.
+
+        echo 'Applying database migrations...' &&
+        python manage.py migrate --noinput &&
+
+        echo 'Running initial data seeding...' &&
+        python manage.py seed_initial_data &&
+
+        echo 'Starting Django development server...' &&
         python manage.py runserver 0.0.0.0:8000
       "
     volumes:
-      - ./backend:/app # Mounts host's backend directory to /app in container (for live code reload)
+      - ./backend:/app
       - ./app.log:/app/app.log
       - ./error.log:/app/error.log
       - ./llm_interaction.log:/app/llm_interaction.log
@@ -80,28 +91,27 @@ services:
     # For Linux hosts, to allow containers to reach Ollama on host.docker.internal:
     # extra_hosts:
     #  - "host.docker.internal:host-gateway"
+  # --- END OF MODIFIED backend SERVICE ---
 
   celery_worker:
     build: ./backend
     container_name: aigent_celery_worker
-    # -P gevent for async tasks. Concurrency can be tuned.
-    # 'lba_project' will be the name of our Django project.
     command: celery -A lba_project worker -l info -P gevent --concurrency=4
     volumes:
       - ./backend:/app
-      - ./app.log:/app/app.log # Share log files
+      - ./app.log:/app/app.log
       - ./error.log:/app/error.log
       - ./llm_interaction.log:/app/llm_interaction.log
     env_file:
       - .env
     depends_on:
-      backend: # Ensures migrations run (from backend service) before worker starts full operation
-        condition: service_started # or use a custom healthcheck on backend if needed
+      backend: # Ensures migrations run (from backend service) before worker starts
+        condition: service_started # Changed to service_started as migrations are now part of backend's command
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # extra_hosts: # Same as backend if needed
+    # extra_hosts:
     #  - "host.docker.internal:host-gateway"
 
   celery_beat:
@@ -113,28 +123,27 @@ services:
     env_file:
       - .env
     depends_on:
-      backend:
-        condition: service_started
+      backend: # Ensures migrations run (from backend service) before beat starts
+        condition: service_started # Changed to service_started
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # extra_hosts: # Same as backend if needed
+    # extra_hosts:
     #  - "host.docker.internal:host-gateway"
 
   flower:
-    image: mher/flower:2.0 # Or check for latest compatible version
+    image: mher/flower:2.0
     container_name: aigent_flower
-    # CELERY_BROKER_URL is already defined in .env and loaded via env_file
     command: celery flower --broker=${CELERY_BROKER_URL} --basic_auth=${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}
     ports:
-      - "5555:5555" # Access Flower UI via http://localhost:5555
+      - "5555:5555"
     env_file:
       - .env
     depends_on:
       rabbitmq:
         condition: service_healthy
-      celery_worker: # Wait for worker to be up
+      celery_worker:
         condition: service_started
 
 volumes:

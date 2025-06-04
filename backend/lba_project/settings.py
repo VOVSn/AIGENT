@@ -120,8 +120,33 @@ REST_FRAMEWORK = {
 # SIMPLE_JWT = {
 #     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=env.int('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', default=60)),
 #     'REFRESH_TOKEN_LIFETIME': timedelta(days=env.int('JWT_REFRESH_TOKEN_LIFETIME_DAYS', default=1)),
-#     'ROTATE_REFRESH_TOKENS': False,
-#     'BLACKLIST_AFTER_ROTATION': True, # Requires simplejwt.token_blacklist app
+#     'ROTATE_REFRESH_TOKENS': False, # If True, a new refresh token is issued when the old one is used
+#     'BLACKLIST_AFTER_ROTATION': True, # Requires 'rest_framework_simplejwt.token_blacklist' app if ROTATE_REFRESH_TOKENS is True
+#     'UPDATE_LAST_LOGIN': True, # If True, updates the user's last_login field upon successful token refresh
+#
+#     'ALGORITHM': 'HS256', # Default
+#     'SIGNING_KEY': settings.SECRET_KEY, # Default
+#     'VERIFYING_KEY': None, # Default
+#     'AUDIENCE': None, # Default
+#     'ISSUER': None, # Default
+#     'JWK_URL': None, # Default
+#     'LEEWAY': 0, # Default
+#
+#     'AUTH_HEADER_TYPES': ('Bearer',), # Default, e.g., "Authorization: Bearer <token>"
+#     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION', # Default
+#     'USER_ID_FIELD': 'id', # Default (User model's primary key field name)
+#     'USER_ID_CLAIM': 'user_id', # Default
+#     'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule', # Default
+#
+#     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',), # Default
+#     'TOKEN_TYPE_CLAIM': 'token_type', # Default
+#     'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser', # Default
+#
+#     'JTI_CLAIM': 'jti', # Default
+#
+#     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp', # Default
+#     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5), # Default, for sliding tokens (not used by default)
+#     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1), # Default, for sliding tokens
 # }
 
 # Celery Configuration
