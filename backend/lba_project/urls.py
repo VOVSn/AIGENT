@@ -19,6 +19,7 @@ urlpatterns = [
 
     # Include URLs from the 'users' app under an 'auth' prefix or similar
     path('api/v1/auth/', include('users.urls', namespace='users_api')), # Added this line
+    path('api/v1/', include('aigents.urls', namespace='aigents_api')),
 
     # We will add other app-specific API URLs here later, e.g., for chat
     # path('api/v1/chat/', include('aigents.urls')),
