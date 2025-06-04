@@ -1,0 +1,117 @@
+{
+    "name": "LBA Aigent Dev Container",
+
+    // Use your existing docker-compose.yml to configure the container.
+    // The path is relative to this devcontainer.json file.
+    "dockerComposeFile": [
+        "../docker-compose.yml"
+    ],
+
+    // The 'service' property selects which service in your docker-compose.yml
+    // to use for the dev container. 'backend' is our Django app.
+    "service": "backend",
+
+    // The 'workspaceFolder' property sets the path VS Code will open in the
+    // container. This should match the WORKDIR in your Dockerfile or where
+    // your app code is mounted.
+    "workspaceFolder": "/app",
+
+    // Optional: Set the user VS Code should use when connecting to the container.
+    // If your Dockerfile creates a non-root user and switches to it, specify that here.
+    // For now, assuming the default (often root, or whatever user the 'backend' service runs as).
+    // "remoteUser": "vscode", // Or "root" if your container runs as root
+
+    // --- VS Code Customizations ---
+    "customizations": {
+        "vscode": {
+            // List of extensions to install automatically into the dev container.
+            "extensions": [
+                "ms-python.python",                 // Python support
+                "ms-python.vscode-pylance",         // IntelliSense by Pylance
+                "ms-python.debugpy",                // Python debugger
+                "batisteo.vscode-django",           // Django specific tools (templates, manage.py tasks)
+                "ms-azuretools.vscode-docker",      // Docker integration (view containers, images)
+                "visualstudioexptteam.vscodeintellicode", // AI-assisted IntelliSense
+                "eamodio.gitlens",                  // Git supercharger
+                "bierner.markdown-preview-github-styles", // Better markdown previews
+                "redhat.vscode-yaml"                // YAML language support (for docker-compose, etc.)
+            ],
+
+            // --- VS Code Settings specific to this dev container ---
+            "settings": {
+                // --- Python Specific Settings ---
+                // Point to the Python interpreter inside the container.
+                // This path comes from the base Python image (python:3.11-slim-bullseye)
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.testing.unittestEnabled": false, // Disable unittest if not using
+                "python.testing.pytestEnabled": true,    // Enable pytest if you plan to use it
+                "[python]": {
+                    // "editor.defaultFormatter": "autopep8", // Or "autopep8" or "ruff" if you prefer/install
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.organizeImports": "explicit" // Uses isort (if installed) or Ruff
+                    }
+                },
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": false, // Disable pylint if using Ruff or Flake8
+                // If you prefer Ruff for linting and formatting (it's very fast and becoming popular):
+                // You'd need to add "charliermarsh.ruff" to extensions and potentially configure ruff in pyproject.toml
+                // "python.linting.flake8Enabled": false, // Example if using ruff
+
+                // --- Terminal Settings ---
+                // Use bash as the default shell inside the container (if available and preferred)
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "/bin/bash"
+                    }
+                },
+
+                // --- Django Specific (using batisteo.vscode-django extension) ---
+                "django.projectRoot": "${workspaceFolder}", // Usually correct by default
+                "django.manageScript": "manage.py", // Or "python manage.py"
+
+                // --- Other useful settings ---
+                "files.eol": "\n", // Ensure consistent line endings
+                "editor.rulers": [88, 120], // Pep8 and common line length guides
+                "files.insertFinalNewline": true,
+                "files.trimFinalNewlines": true,
+                "files.trimTrailingWhitespace": true
+            }
+        }
+    },
+
+    // --- Lifecycle Scripts (Optional but often useful) ---
+
+    // 'initializeCommand': Commands to run only once when the dev container is created.
+    // Useful if you need to set up things that aren't in your Dockerfile/Compose.
+    // "initializeCommand": "echo 'Dev container initializing...'",
+
+    // 'onCreateCommand': Commands to run when the dev container is created (after Docker build).
+    // Could be used for initial setup like installing global npm packages if needed.
+    // "onCreateCommand": "sudo apt-get update && sudo apt-get install -y some-tool",
+
+    // 'postCreateCommand': Commands to run after the dev container is created AND after VS Code attaches.
+    // Good for things like `pip install -r requirements-dev.txt` if you have separate dev dependencies.
+    // Or ensuring migrations are run if your compose command doesn't always catch it before VS Code connects.
+    // For now, our docker-compose 'backend' service already runs migrations.
+    // "postCreateCommand": "python manage.py migrate",
+
+    // 'postStartCommand': Commands to run every time the dev container starts (including rebuilds).
+    // "postStartCommand": "echo 'Dev container started.'",
+
+    // 'postAttachCommand': Commands to run every time VS Code attaches to an already running container.
+    // "postAttachCommand": {
+    //   "server": "echo 'VS Code attached to server.'"
+    // }
+
+    // --- Port Forwarding ---
+    // If you want VS Code to automatically forward ports from the container to your host.
+    // Your docker-compose.yml already handles the main app port (8000).
+    // This can be useful for debugging ports or other services run during development.
+    "forwardPorts": [8000], // For Django dev server
+
+    // --- Features (Optional, for adding pre-configured tools) ---
+    // Example: "features": { "ghcr.io/devcontainers/features/node:1": {} } // If you needed Node.js
+    "features": {}
+}

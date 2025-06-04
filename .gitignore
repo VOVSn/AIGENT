@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.Python
+venv/
+env/
+.env # Local environment variables (keep .env.example)
+pip-wheel-metadata/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/ # If you use collectstatic locally for testing
+
+# Docker
+.dockerignore
+# docker-compose.override.yml (if you use it for local overrides and don't want to commit)
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Build artifacts
+build/
+dist/

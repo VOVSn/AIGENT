@@ -1,0 +1,12 @@
+Django>=4.2
+djangorestframework>=3.14
+psycopg2-binary>=2.9
+celery[librabbitmq,redis]>=5.3 # For RabbitMQ broker and Redis result backend
+gevent>=23.9.1                     # Async worker pool for Celery
+django-celery-beat>=2.5.0          # For scheduled tasks (DatabaseScheduler)
+flower>=2.0                 # Celery monitoring UI
+djangorestframework-simplejwt>=5.3
+httpx>=0.27
+asgiref>=3.7
+django-environ>=0.11
+gunicorn>=21.2
