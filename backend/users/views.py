@@ -1,3 +1,19 @@
-from django.shortcuts import render
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
+from users.serializers import PasswordChangeSerializer
+from django.contrib.auth import get_user_model
 
-# Create your views here.
+User = get_user_model()
+
+class PasswordChangeView(generics.GenericAPIView):
+    """
+    An endpoint for changing password.
+    """
+    serializer_class = PasswordChangeSerializer
+    permission_classes = (permissions.IsAuthenticated,) # Requires token authentication
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Password updated successfully"}, status=status.HTTP_200_OK)
