@@ -172,3 +172,9 @@ def root_view(request):
     if request.user.is_authenticated:
         return redirect('chat_page') # Name of the chat page URL pattern
     return redirect('login_page')   # Name of the login page URL pattern
+
+
+class PasswordChangePageView(LoginRequiredMixin, TemplateView):
+    """Serves the password_change.html page. Requires login."""
+    template_name = 'password_change.html'
+    login_url = '/login/' # Or use reverse('login_page')

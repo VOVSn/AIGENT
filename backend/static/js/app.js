@@ -1,49 +1,21 @@
-document.addEventListener('DOMContentLoaded', function() {
-    const accessToken = localStorage.getItem('accessToken');
-    const username = localStorage.getItem('username');
+// Global functions and event listeners
+// Ensure this script is loaded after the DOM is ready, or wrap in DOMContentLoaded
 
-    // If on chat page, check token and initialize
-    if (window.location.pathname.includes('/chat/')) {
-        if (!accessToken) {
-            window.location.href = '/login/'; // Redirect to login if no token
-            return;
-        }
-        document.getElementById('usernameDisplay').textContent = username || 'User';
-        initializeChat();
-    }
-
-    // Logout functionality
-    const logoutButton = document.getElementById('logoutButton');
-    if (logoutButton) {
-        logoutButton.addEventListener('click', logout);
-    }
-    
-    // Password change functionality
-    const passwordChangeForm = document.getElementById('passwordChangeForm');
-    if (passwordChangeForm) {
-        passwordChangeForm.addEventListener('submit', handleChangePassword);
-    }
-});
-
-function initializeChat() {
-    const messageForm = document.getElementById('messageForm');
-    const messageInput = document.getElementById('messageInput');
-    
-    loadChatHistory();
-
-    messageForm.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        const messageText = messageInput.value.trim();
-        if (messageText) {
-            appendMessage('user', messageText);
-            messageInput.value = '';
-            await sendMessageToAigent(messageText);
-        }
-    });
+// --- Utility Functions ---
+function getCSRFToken() { // If ever needed for other types of Django forms
+    const csrfElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return csrfElement ? csrfElement.value : null;
 }
 
+function scrollToBottom(element) {
+    if (element) {
+        element.scrollTop = element.scrollHeight;
+    }
+}
+
+// --- Authentication & API ---
 async function apiFetch(url, options = {}) {
-    const accessToken = localStorage.getItem('accessToken');
+    let accessToken = localStorage.getItem('accessToken'); // Get fresh token each time
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -53,46 +25,44 @@ async function apiFetch(url, options = {}) {
     }
 
     try {
-        const response = await fetch(url, { ...options, headers });
-        if (response.status === 401) { // Unauthorized
-            // Try to refresh token or redirect to login
+        let response = await fetch(url, { ...options, headers });
+
+        if (response.status === 401 && url !== '/api/v1/auth/token/refresh/') { // Unauthorized, and not a refresh failing
+            console.log("Access token expired or invalid. Attempting refresh...");
             const refreshed = await refreshToken();
             if (refreshed) {
-                // Retry original request with new token
-                headers['Authorization'] = `Bearer ${localStorage.getItem('accessToken')}`;
-                const retryResponse = await fetch(url, { ...options, headers });
-                if (!retryResponse.ok) {
-                    // If retry also fails, or for other non-401 errors from original request
-                    const errorData = await retryResponse.json().catch(() => ({ detail: `HTTP error ${retryResponse.status}` }));
-                    throw new Error(errorData.detail || `API request failed with status ${retryResponse.status}`);
-                }
-                return await retryResponse.json();
+                accessToken = localStorage.getItem('accessToken'); // Get the new token
+                headers['Authorization'] = `Bearer ${accessToken}`; // Update headers
+                console.log("Retrying original request with new token...");
+                response = await fetch(url, { ...options, headers }); // Retry original request
             } else {
-                logout(); // Refresh failed, logout
-                throw new Error("Session expired. Please login again.");
+                logout("Session expired. Please login again."); // Refresh failed
+                return Promise.reject(new Error("Session expired. Please login again.")); // Stop further processing
             }
         }
+
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
-            throw new Error(errorData.detail || `API request failed with status ${response.status}`);
+            const errorData = await response.json().catch(() => ({ detail: `Request failed with status ${response.status}` }));
+            console.error(`API Error ${response.status} for ${url}:`, errorData);
+            throw new Error(errorData.detail || `API request failed: ${response.statusText} (${response.status})`);
         }
-        // For 202 Accepted, response might not have JSON body or it might be empty
-        if (response.status === 202 || response.status === 204) { 
-            return response; // Or some specific success indicator
+        
+        if (response.status === 204) { // No Content
+            return null; 
         }
+        // For 202 Accepted, it might or might not have a body. Assume it does for send_message.
         return await response.json();
+
     } catch (error) {
-        console.error('API Fetch Error:', error);
-        // Display error to user or handle appropriately
-        // For chat, might append an error message to chat window
+        console.error('API Fetch General Error:', error.message);
         throw error; // Re-throw to be caught by calling function
     }
 }
 
-
 async function refreshToken() {
     const currentRefreshToken = localStorage.getItem('refreshToken');
     if (!currentRefreshToken) {
+        console.log("No refresh token available.");
         return false;
     }
     try {
@@ -104,162 +74,183 @@ async function refreshToken() {
         if (response.ok) {
             const data = await response.json();
             localStorage.setItem('accessToken', data.access);
-            // If your backend rotates refresh tokens, update it here:
-            // if (data.refresh) localStorage.setItem('refreshToken', data.refresh);
-            console.log("Token refreshed successfully");
+            // if (data.refresh) { localStorage.setItem('refreshToken', data.refresh); } // If backend rotates refresh tokens
+            console.log("Token refreshed successfully.");
             return true;
         }
-        console.error("Failed to refresh token:", response.status);
+        console.error("Failed to refresh token:", response.status, await response.text());
         return false;
     } catch (error) {
-        console.error("Error refreshing token:", error);
+        console.error("Error during token refresh:", error);
         return false;
     }
 }
 
+function logout(message = "You have been logged out.") {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('username');
+    // alert(message); // Optional: notify user
+    window.location.href = '/login/';
+}
+
+// --- Chat Page Specific Functions ---
+function setupChatPage() {
+    const messageForm = document.getElementById('messageForm');
+    const messageInput = document.getElementById('messageInput');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    const storedUsername = localStorage.getItem('username');
+
+    if (usernameDisplay && storedUsername) {
+        usernameDisplay.textContent = storedUsername;
+    }
+    
+    loadChatHistory();
+
+    if (messageForm) {
+        messageForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const messageText = messageInput.value.trim();
+            if (messageText) {
+                appendMessageToChat('user', messageText);
+                messageInput.value = '';
+                await sendMessageToAigent(messageText);
+            }
+        });
+    }
+}
 
 async function loadChatHistory() {
     const chatMessagesDiv = document.getElementById('chatMessages');
-    chatMessagesDiv.innerHTML = ''; // Clear existing messages
+    if (!chatMessagesDiv) return;
+    chatMessagesDiv.innerHTML = ''; 
     try {
         const data = await apiFetch('/api/v1/chat/history/');
         if (data.history && Array.isArray(data.history)) {
             data.history.forEach(msg => {
-                appendMessage(msg.role, msg.content, msg.timestamp, false); // Don't scroll for initial load
+                appendMessageToChat(msg.role, msg.content, msg.timestamp, false);
             });
             scrollToBottom(chatMessagesDiv);
         }
     } catch (error) {
-        console.error('Failed to load chat history:', error);
-        appendMessage('system', `Error loading chat history: ${error.message}`, new Date().toISOString(), true, 'error');
+        console.error('Failed to load chat history:', error.message);
+        appendMessageToChat('system', `Error loading chat history: ${error.message}`, new Date().toISOString(), true, 'error');
     }
 }
 
-function appendMessage(role, text, timestamp, doScroll = true, type = 'normal') {
+function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'normal') {
     const chatMessagesDiv = document.getElementById('chatMessages');
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', role.toLowerCase()); // e.g., 'message user', 'message aigent'
-    if (type === 'error') messageDiv.style.color = 'red';
+    if (!chatMessagesDiv) return;
 
-    const senderSpan = document.createElement('span');
-    senderSpan.classList.add('sender');
-    senderSpan.textContent = role === 'user' ? (localStorage.getItem('username') || 'You') : 'Aigent';
-    
-    const contentP = document.createElement('p');
-    contentP.textContent = text;
-
-    messageDiv.appendChild(senderSpan);
-    messageDiv.appendChild(contentP);
-
-    // Optional: Add timestamp display
-    if (timestamp) {
-        const timeSpan = document.createElement('span');
-        timeSpan.style.fontSize = '0.7em';
-        timeSpan.style.color = role === 'user' ? '#cce5ff' : '#6c757d';
-        timeSpan.style.display = 'block';
-        timeSpan.style.textAlign = role === 'user' ? 'right' : 'left';
-        timeSpan.textContent = new Date(timestamp).toLocaleTimeString();
-        // messageDiv.appendChild(timeSpan); // Or integrate it more nicely
+    const messageWrapper = document.createElement('div');
+    messageWrapper.classList.add('message', role.toLowerCase());
+    if (role === 'user') {
+        messageWrapper.classList.add('user');
+    } else if (role === 'aigent' || role === 'assistant') { // Handle 'assistant' role from backend
+        messageWrapper.classList.add('aigent');
+         role = 'aigent'; // Normalize role for class
+    } else {
+        messageWrapper.classList.add('system');
     }
 
+    if (type === 'error') messageWrapper.classList.add('error');
+    if (type === 'info') messageWrapper.classList.add('info');
 
-    chatMessagesDiv.appendChild(messageDiv);
+
+    const contentP = document.createElement('p');
+    contentP.textContent = text;
+    messageWrapper.appendChild(contentP);
+
+    // Optional: Add timestamp display if needed, current CSS hides .sender
+    // if (timestamp) { ... }
+
+    chatMessagesDiv.appendChild(messageWrapper);
     if (doScroll) {
         scrollToBottom(chatMessagesDiv);
     }
 }
 
-function scrollToBottom(element) {
-    element.scrollTop = element.scrollHeight;
-}
-
 async function sendMessageToAigent(messageText) {
     const typingIndicator = document.getElementById('typingIndicator');
-    typingIndicator.style.display = 'block';
+    if (typingIndicator) typingIndicator.style.display = 'block';
 
     try {
-        const response = await apiFetch('/api/v1/chat/send_message/', {
+        const taskData = await apiFetch('/api/v1/chat/send_message/', {
             method: 'POST',
             body: JSON.stringify({ message: messageText })
         });
         
-        // Response for send_message is 202 Accepted, with task_id in body
-        // but apiFetch for 202 returns the full response object.
-        // We need to parse its body if it's not already done by apiFetch.
-        let taskData;
-        if (response.status === 202) {
-            taskData = await response.json(); // Assuming 202 response has a JSON body
-        } else { // Should have been handled by apiFetch error logic already
-             throw new Error("Unexpected response from send_message");
-        }
-        
-        if (taskData.task_id) {
+        if (taskData && taskData.task_id) { // Ensure taskData is not null (e.g. from 204) and has task_id
             pollTaskStatus(taskData.task_id);
         } else {
-            throw new Error("No task_id received from send_message API.");
+            throw new Error("No task_id received from send_message API or invalid response.");
         }
 
     } catch (error) {
-        console.error('Failed to send message:', error);
-        appendMessage('system', `Error sending message: ${error.message}`, new Date().toISOString(), true, 'error');
-        typingIndicator.style.display = 'none';
+        console.error('Failed to send message:', error.message);
+        appendMessageToChat('system', `Error sending message: ${error.message}`, new Date().toISOString(), true, 'error');
+        if (typingIndicator) typingIndicator.style.display = 'none';
     }
 }
 
-async function pollTaskStatus(taskId, retries = 20, interval = 3000) { // Poll for up to 60 seconds
+async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
     const typingIndicator = document.getElementById('typingIndicator');
     try {
         const data = await apiFetch(`/api/v1/chat/task_status/${taskId}/`);
         
+        if (!data) { // Should not happen with current apiFetch if error handling is correct
+            throw new Error("Received null or undefined data from task status API.");
+        }
+
         if (data.status === 'SUCCESS') {
-            typingIndicator.style.display = 'none';
+            if (typingIndicator) typingIndicator.style.display = 'none';
             if (data.result && data.result.answer_to_user) {
-                appendMessage('aigent', data.result.answer_to_user, new Date().toISOString());
+                appendMessageToChat('aigent', data.result.answer_to_user, new Date().toISOString());
             } else {
-                appendMessage('system', 'Aigent responded but the answer was unclear.', new Date().toISOString(), true, 'error');
+                appendMessageToChat('system', 'Aigent responded but the answer was unclear.', new Date().toISOString(), true, 'error');
             }
         } else if (data.status === 'FAILURE') {
-            typingIndicator.style.display = 'none';
-            appendMessage('system', `Aigent processing failed: ${data.error_message || 'Unknown error'}`, new Date().toISOString(), true, 'error');
+            if (typingIndicator) typingIndicator.style.display = 'none';
+            appendMessageToChat('system', `Aigent processing failed: ${data.error_message || 'Unknown error'}`, new Date().toISOString(), true, 'error');
         } else if (data.status === 'RETRY') {
-            appendMessage('system', `Aigent is retrying processing... (${data.error_message || ''})`, new Date().toISOString(), true, 'info');
-             if (retries > 0) {
+            appendMessageToChat('system', `Aigent is retrying processing... (Info: ${data.error_message || 'No details'})`, new Date().toISOString(), true, 'info');
+            if (retries > 0) {
                 setTimeout(() => pollTaskStatus(taskId, retries - 1, interval), interval);
             } else {
-                typingIndicator.style.display = 'none';
-                appendMessage('system', 'Aigent processing timed out after retries.', new Date().toISOString(), true, 'error');
+                if (typingIndicator) typingIndicator.style.display = 'none';
+                appendMessageToChat('system', 'Aigent processing timed out after retries.', new Date().toISOString(), true, 'error');
             }
         } else if (data.status === 'PENDING' || data.status === 'STARTED') {
             if (retries > 0) {
                 setTimeout(() => pollTaskStatus(taskId, retries - 1, interval), interval);
             } else {
-                typingIndicator.style.display = 'none';
-                appendMessage('system', 'Aigent processing timed out.', new Date().toISOString(), true, 'error');
+                if (typingIndicator) typingIndicator.style.display = 'none';
+                appendMessageToChat('system', 'Aigent processing timed out.', new Date().toISOString(), true, 'error');
             }
         } else {
-            typingIndicator.style.display = 'none';
-            appendMessage('system', `Unknown task status: ${data.status}`, new Date().toISOString(), true, 'error');
+            if (typingIndicator) typingIndicator.style.display = 'none';
+            appendMessageToChat('system', `Unknown task status: ${data.status}`, new Date().toISOString(), true, 'error');
         }
     } catch (error) {
-        console.error(`Error polling task ${taskId}:`, error);
-        typingIndicator.style.display = 'none';
-        appendMessage('system', `Error checking Aigent status: ${error.message}`, new Date().toISOString(), true, 'error');
+        console.error(`Error polling task ${taskId}:`, error.message);
+        if (typingIndicator) typingIndicator.style.display = 'none';
+        appendMessageToChat('system', `Error checking Aigent status: ${error.message}`, new Date().toISOString(), true, 'error');
     }
 }
 
-function logout() {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('username');
-    window.location.href = '/login/';
-}
-
+// --- Password Change Page Specific Functions ---
 async function handleChangePassword(event) {
     event.preventDefault();
-    const oldPassword = document.getElementById('old_password').value;
-    const newPassword1 = document.getElementById('new_password1').value;
-    const newPassword2 = document.getElementById('new_password2').value;
+    const oldPasswordEl = document.getElementById('old_password');
+    const newPassword1El = document.getElementById('new_password1');
+    const newPassword2El = document.getElementById('new_password2');
     const statusElement = document.getElementById('passwordChangeStatus');
+
+    const oldPassword = oldPasswordEl.value;
+    const newPassword1 = newPassword1El.value;
+    const newPassword2 = newPassword2El.value;
+
+    if (!statusElement) { console.error("Password status element not found"); return; }
 
     statusElement.style.display = 'none';
     statusElement.textContent = '';
@@ -267,6 +258,12 @@ async function handleChangePassword(event) {
 
     if (newPassword1 !== newPassword2) {
         statusElement.textContent = "New passwords do not match.";
+        statusElement.classList.add('error-message');
+        statusElement.style.display = 'block';
+        return;
+    }
+    if (!newPassword1) { // Basic validation
+        statusElement.textContent = "New password cannot be empty.";
         statusElement.classList.add('error-message');
         statusElement.style.display = 'block';
         return;
@@ -283,10 +280,9 @@ async function handleChangePassword(event) {
         });
         statusElement.textContent = "Password changed successfully!";
         statusElement.classList.add('success-message');
-        // Clear form fields
-        document.getElementById('old_password').value = '';
-        document.getElementById('new_password1').value = '';
-        document.getElementById('new_password2').value = '';
+        if(oldPasswordEl) oldPasswordEl.value = '';
+        if(newPassword1El) newPassword1El.value = '';
+        if(newPassword2El) newPassword2El.value = '';
     } catch (error) {
         statusElement.textContent = `Error: ${error.message || 'Failed to change password.'}`;
         statusElement.classList.add('error-message');
@@ -294,3 +290,48 @@ async function handleChangePassword(event) {
         statusElement.style.display = 'block';
     }
 }
+
+
+// --- DOMContentLoaded Event Listener ---
+document.addEventListener('DOMContentLoaded', function() {
+    const accessToken = localStorage.getItem('accessToken');
+    const currentPagePath = window.location.pathname;
+
+    // Generic Logout Button Handler (for any page that has it with this ID)
+    const logoutButton = document.getElementById('logoutButton') || document.getElementById('logoutButtonGlobal');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', logout);
+    }
+
+    if (currentPagePath.includes('/chat/')) {
+        if (!accessToken) {
+            window.location.href = '/login/'; // Redirect to login if no token
+            return;
+        }
+        setupChatPage();
+    } else if (currentPagePath.includes('/password-change/')) {
+        if (!accessToken) {
+            window.location.href = '/login/';
+            return;
+        }
+        // Username display is handled by inline script in password_change.html for simplicity
+        // or could be done here.
+        const username = localStorage.getItem('username');
+        const usernameDisplayEl = document.getElementById('usernameDisplay');
+        if (usernameDisplayEl && username) {
+            usernameDisplayEl.textContent = username;
+        }
+
+        const pcForm = document.getElementById('passwordChangeForm');
+        if (pcForm) {
+            pcForm.addEventListener('submit', handleChangePassword);
+        }
+    } else if (currentPagePath.includes('/login/')) {
+        // If already logged in (e.g. token exists), redirect to chat
+        if (accessToken) {
+            window.location.href = '/chat/';
+            return;
+        }
+        // Login form submission is handled by inline script in login.html
+    }
+});
