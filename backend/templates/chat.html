@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LBA Chat</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LBA Chat</h1>
+            <div class="user-info">
+                Logged in as: <span id="usernameDisplay"></span>
+                <button id="logoutButton">Logout</button>
+            </div>
+        </header>
+        
+        <div id="chatWindow">
+            <div id="chatMessages">
+                <!-- Messages will be appended here -->
+            </div>
+            <div id="typingIndicator" style="display:none;"><em>Aigent is typing...</em></div>
+        </div>
+
+        <form id="messageForm">
+            <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" required>
+            <button type="submit">Send</button>
+        </form>
+
+        <hr>
+        <div class="password-change-section">
+            <h2>Change Password</h2>
+            <form id="passwordChangeForm">
+                <div>
+                    <label for="old_password">Old Password:</label>
+                    <input type="password" id="old_password" required>
+                </div>
+                <div>
+                    <label for="new_password1">New Password:</label>
+                    <input type="password" id="new_password1" required>
+                </div>
+                <div>
+                    <label for="new_password2">Confirm New Password:</label>
+                    <input type="password" id="new_password2" required>
+                </div>
+                <button type="submit">Change Password</button>
+            </form>
+            <p id="passwordChangeStatus" class="status-message" style="display:none;"></p>
+        </div>
+    </div>
+
+    <script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>

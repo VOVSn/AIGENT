@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LBA Login</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <h1>Local Business Assistant - Login</h1>
+        <form id="loginForm">
+            <div>
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+        <p id="loginError" class="error-message" style="display:none;"></p>
+    </div>
+
+    <script>
+        // Basic JS for login. More advanced logic will be in app.js for the chat page.
+        document.getElementById('loginForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginErrorElement = document.getElementById('loginError');
+            loginErrorElement.style.display = 'none';
+            loginErrorElement.textContent = '';
+
+            try {
+                const response = await fetch('/api/v1/auth/token/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // 'X-CSRFToken': getCSRFToken() // Usually not needed for DRF token auth if session auth is not primary
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('accessToken', data.access);
+                    localStorage.setItem('refreshToken', data.refresh);
+                    localStorage.setItem('username', username); // Store username for display
+                    window.location.href = '/chat/'; // Redirect to chat page
+                } else {
+                    let errorMessage = "Login failed. Please check your credentials.";
+                    if (data.detail) {
+                        errorMessage = data.detail;
+                    } else if (data.username) {
+                        errorMessage = `Username: ${data.username.join(', ')}`;
+                    } else if (data.password) {
+                        errorMessage = `Password: ${data.password.join(', ')}`;
+                    }
+                    loginErrorElement.textContent = errorMessage;
+                    loginErrorElement.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Login request failed:', error);
+                loginErrorElement.textContent = 'An error occurred during login. Please try again.';
+                loginErrorElement.style.display = 'block';
+            }
+        });
+
+        // Helper to get CSRF token if needed (e.g. if SessionAuthentication is also enabled)
+        // For pure JWT, this is often not required for token endpoint.
+        // function getCSRFToken() {
+        //     const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        //     return csrfToken ? csrfToken.value : null;
+        // }
+    </script>
+</body>
+</html>

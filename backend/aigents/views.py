@@ -1,6 +1,9 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import render
+from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 from celery.result import AsyncResult # To check task status
 
@@ -141,3 +144,31 @@ class ChatHistoryView(generics.GenericAPIView):
         
         serializer = self.get_serializer({"history": history_data})
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+def login_page_view(request):
+    """Serves the login.html page."""
+    # If user is already authenticated, maybe redirect to chat? (Optional)
+    # if request.user.is_authenticated:
+    #     from django.shortcuts import redirect
+    #     return redirect('chat_page') # Assuming 'chat_page' is the name of the chat URL
+    return render(request, 'login.html')
+
+class ChatPageView(LoginRequiredMixin, TemplateView):
+    """Serves the chat.html page. Requires login."""
+    template_name = 'chat.html'
+    login_url = '/login/' # Redirect here if not authenticated (matches URL name below)
+    # redirect_field_name = 'next' # Default
+
+    # You can pass additional context to the template if needed
+    # def get_context_data(self, **kwargs):
+    #     context = super().get_context_data(**kwargs)
+    #     context['username'] = self.request.user.username
+    #     return context
+
+# For simplicity, let's have a root view that redirects to login or chat
+from django.shortcuts import redirect
+def root_view(request):
+    if request.user.is_authenticated:
+        return redirect('chat_page') # Name of the chat page URL pattern
+    return redirect('login_page')   # Name of the login page URL pattern
