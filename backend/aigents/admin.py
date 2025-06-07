@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.utils.html import format_html
+import json
 from .models import Prompt, Aigent, ChatHistory
 
 @admin.register(Prompt)
@@ -8,23 +10,54 @@ class PromptAdmin(admin.ModelAdmin):
 
 @admin.register(Aigent)
 class AigentAdmin(admin.ModelAdmin):
-    # UPDATED list_display and list_filter
+    # UPDATED: Reorganized the admin view for better clarity
     list_display = ('name', 'is_active', 'presentation_format', 'ollama_model_name', 'default_prompt_template', 'created_at')
     list_filter = ('is_active', 'presentation_format', 'ollama_model_name')
     search_fields = ('name', 'system_persona_prompt')
-    # For JSONFields like ollama_endpoints and aigent_state,
-    # direct editing in admin can be clunky. Consider custom widgets or readonly display
-    # if they become very complex.
-    # Example:
-    # readonly_fields = ('aigent_state',) # If you want to prevent direct admin edit
+    
+    # NEW: Added readonly_fields for our pretty JSON display
+    readonly_fields = ('aigent_state_display',)
+
+    # NEW: Organized the fields into logical sections using fieldsets
+    fieldsets = (
+        ('Core Information', {
+            'fields': ('name', 'is_active', 'presentation_format')
+        }),
+        ('Persona & Prompting', {
+            'fields': ('system_persona_prompt', 'default_prompt_template')
+        }),
+        ('Ollama Configuration', {
+            'fields': (
+                'ollama_model_name', 
+                'ollama_endpoints', 
+                'ollama_temperature', 
+                'ollama_context_length', 
+                'request_timeout_seconds'
+            )
+        }),
+        ('Aigent State', {
+            'classes': ('collapse',), # Make this section collapsible
+            'fields': ('aigent_state_display',), # Use our new pretty display field
+        }),
+    )
+
+    # NEW: Method to render the aigent_state JSON beautifully
+    def aigent_state_display(self, obj):
+        """Creates a pretty-printed, read-only view of the JSON state."""
+        if obj.aigent_state:
+            formatted_json = json.dumps(obj.aigent_state, indent=2)
+            # Wrap in <pre> tags to preserve formatting
+            return format_html("<pre>{}</pre>", formatted_json)
+        return "State is empty."
+    aigent_state_display.short_description = 'Formatted Aigent State'
 
 
 @admin.register(ChatHistory)
 class ChatHistoryAdmin(admin.ModelAdmin):
     list_display = ('user', 'aigent', 'message_count', 'updated_at')
-    list_filter = ('aigent', 'user') # Make sure user filter is usable if many users
+    list_filter = ('aigent', 'user') 
     search_fields = ('user__username', 'aigent__name')
-    readonly_fields = ('history_display',) # Display history nicely
+    readonly_fields = ('history_display',) 
 
     def message_count(self, obj):
         if isinstance(obj.history, list):
@@ -33,16 +66,8 @@ class ChatHistoryAdmin(admin.ModelAdmin):
     message_count.short_description = 'Messages'
 
     def history_display(self, obj):
-        # A more readable display for the JSON history in admin
-        from django.utils.html import format_html
-        import json
         if obj.history:
-            # Pretty print the JSON
             formatted_json = json.dumps(obj.history, indent=2)
             return format_html("<pre>{}</pre>", formatted_json)
         return "No history."
     history_display.short_description = 'Formatted Chat History'
-
-    # To make 'history' field non-editable directly if it's complex or managed by code
-    # You could exclude 'history' from fields or add it to readonly_fields
-    # fields = ('user', 'aigent', 'history_display', 'created_at', 'updated_at') # if hiding direct history edit

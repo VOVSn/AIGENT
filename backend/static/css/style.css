@@ -151,7 +151,7 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
     padding: 15px; /* Creates more space between bubble edge and iframe */
     background-color: var(--aigent-message-bg);
     max-width: fit-content !important;
-    min-width: 300px !important;
+    min-width: 400px !important;
     width: auto !important;
     display: inline-block;
     align-self: flex-start;
@@ -218,6 +218,37 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
     background: rgba(220, 53, 69, 0.8); /* Red for stop/danger */
 }
 
+/* UPDATED: Styles for the minimized widget placeholder and its button */
+.minimised-widget-message {
+    padding: 15px 20px;
+    font-style: italic;
+    color: var(--text-secondary);
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    cursor: default;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.widget-restore-btn {
+    background-color: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-style: normal; /* Override italic from parent */
+    margin-left: 15px;
+}
+
+.widget-restore-btn:hover {
+    background-color: var(--accent-hover);
+}
+
 /* Dark theme adjustments */
 html[data-theme="dark"] .widget-copy-btn,
 html[data-theme="dark"] .widget-refresh-btn,
@@ -232,7 +263,11 @@ html[data-theme="dark"] .widget-refresh-btn:hover {
 }
 
 html[data-theme="dark"] .widget-stop-btn:hover {
-    background: rgba(255, 82, 99, 0.6); /* Red for stop/danger in dark mode */
+    background: rgba(255, 82, 99, 0.6);
+}
+
+html[data-theme="dark"] .widget-restore-btn:hover {
+    background-color: var(--accent-hover);
 }
 
 html[data-theme="dark"] .message.aigent iframe {
@@ -247,12 +282,12 @@ html[data-theme="memphis"] .message.aigent.html-content {
 }
 
 html[data-theme="memphis"] .html-widget-container {
-    box-shadow: none; /* Remove the inner container's outline */
+    box-shadow: none;
 }
 
 html[data-theme="memphis"] .message.aigent iframe {
-    border: none; /* Remove iframe's own border */
-    box-shadow: none; /* Remove iframe's own shadow */
+    border: none;
+    box-shadow: none;
 }
 
 html[data-theme="memphis"] .widget-copy-btn,
@@ -263,28 +298,28 @@ html[data-theme="memphis"] .widget-stop-btn {
     border: 2px solid var(--border-color);
 }
 
-html[data-theme="memphis"] .widget-copy-btn:hover {
-    background: var(--accent-hover);
-    transform: scale(1.2);
+html[data-theme="memphis"] .widget-copy-btn:hover { background: var(--accent-hover); transform: scale(1.2); }
+html[data-theme="memphis"] .widget-refresh-btn:hover { background: var(--accent-hover); transform: rotate(90deg) scale(1.1); }
+html[data-theme="memphis"] .widget-stop-btn:hover { background: var(--error-text); transform: scale(1.2); }
+
+html[data-theme="memphis"] .widget-restore-btn {
+    background-color: var(--accent-primary);
+    border: 2px solid var(--border-color);
+    box-shadow: 2px 2px 0px var(--shadow-color);
+}
+html[data-theme="memphis"] .widget-restore-btn:active {
+    transform: translateY(1px) translateX(1px);
+    box-shadow: 1px 1px 0px var(--shadow-color);
 }
 
-html[data-theme="memphis"] .widget-refresh-btn:hover {
-    background: var(--accent-hover);
-    transform: rotate(90deg) scale(1.1);
-}
-
-html[data-theme="memphis"] .widget-stop-btn:hover {
-    background: var(--error-text);
-    transform: scale(1.2);
-}
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .message.aigent.html-content, .html-widget-container { min-width: 250px; }
+    .message.aigent.html-content, .html-widget-container { min-width: 320px; }
 }
 
 @media (max-width: 480px) {
-    .message.aigent.html-content, .html-widget-container { min-width: 200px; }
+    .message.aigent.html-content, .html-widget-container { min-width: 260px; }
 }
 
 /* --- END WIDGET STYLES --- */

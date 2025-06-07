@@ -110,7 +110,6 @@ async function populateAigentSelector() {
             option.dataset.presentationFormat = aigent.presentation_format;
             if (aigent.is_active) {
                 option.selected = true;
-                // Update the global state object with data from the API
                 currentAigent.id = aigent.id;
                 currentAigent.name = aigent.name;
                 currentAigent.presentationFormat = aigent.presentation_format;
@@ -134,7 +133,6 @@ async function handleAigentSwitch(event) {
             method: 'POST',
             body: JSON.stringify({ aigent_id: newAigentId })
         });
-        // Update global state object completely on switch
         currentAigent.id = newAigentId;
         currentAigent.name = newAigentName;
         currentAigent.presentationFormat = newPresentationFormat;
@@ -146,7 +144,7 @@ async function handleAigentSwitch(event) {
     } catch (error) {
         console.error("Failed to switch aigent:", error);
         appendMessageToChat('system', `Error switching aigent: ${error.message}`, new Date().toISOString(), true, 'error');
-        selector.value = currentAigent.id; // Revert selector if switch fails
+        selector.value = currentAigent.id; 
     } finally {
         const settingsMenu = document.getElementById('settings-menu');
         if (settingsMenu) settingsMenu.classList.remove('active');
@@ -170,104 +168,79 @@ async function loadChatHistory() {
 }
 
 function setupAutoResizingIframe(iframe, htmlContent) {
-    // Set initial properties
     iframe.style.border = 'none';
     iframe.style.display = 'block';
     iframe.setAttribute('scrolling', 'no');
     iframe.srcdoc = htmlContent;
 
     let isResizing = false;
-    let lastHeight = 0;
-    let lastWidth = 0;
-    let resizeAttempts = 0;
-    const maxResizeAttempts = 5;
+    let isInitialLoad = true; 
 
-    const resizeIframe = (iframeEl) => {
-        // Prevent multiple simultaneous resize operations
+    const resizeIframe = (iframeEl, shouldScroll) => {
         if (isResizing) return;
         isResizing = true;
 
         try {
             const iframeDoc = iframeEl.contentDocument || iframeEl.contentWindow.document;
             if (iframeDoc && iframeDoc.body) {
-                // Wait for content to fully render
                 setTimeout(() => {
                     try {
-                        const body = iframeDoc.body;
                         const html = iframeDoc.documentElement;
+                        const newHeight = html.scrollHeight;
+                        const newWidth = html.scrollWidth;
+
+                        const minHeight = 150, maxHeight = window.innerHeight * 0.8;
+                        const minWidth = 400, maxWidth = Math.min(window.innerWidth * 0.9, 1200); 
                         
-                        const originalBodyStyle = { height: body.style.height, width: body.style.width, overflow: body.style.overflow };
-                        const originalHtmlStyle = { height: html.style.height, width: html.style.width, overflow: html.style.overflow };
+                        const finalHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+                        const finalWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+
+                        iframeEl.style.height = finalHeight + 'px';
+                        iframeEl.style.width = finalWidth + 'px';
                         
-                        body.style.height = 'auto'; body.style.width = 'auto'; body.style.overflow = 'visible';
-                        html.style.height = 'auto'; html.style.width = 'auto'; html.style.overflow = 'visible';
-                        
-                        body.offsetHeight; body.offsetWidth;
-                        
-                        const scrollHeight = Math.max(body.scrollHeight || 0, body.offsetHeight || 0, html.clientHeight || 0, html.scrollHeight || 0, html.offsetHeight || 0);
-                        const scrollWidth = Math.max(body.scrollWidth || 0, body.offsetWidth || 0, html.clientWidth || 0, html.scrollWidth || 0, html.offsetWidth || 0);
-                        
-                        let boundingHeight = 0, boundingWidth = 0;
-                        try { const rect = body.getBoundingClientRect(); boundingHeight = rect.height; boundingWidth = rect.width; } catch (e) { }
-                        
-                        const contentHeight = Math.max(scrollHeight, boundingHeight);
-                        const contentWidth = Math.max(scrollWidth, boundingWidth);
-                        
-                        const minHeight = 120, maxHeight = window.innerHeight * 0.8;
-                        const minWidth = 300, maxWidth = Math.min(window.innerWidth * 0.9, 1200);
-                        
-                        const finalHeight = Math.min(Math.max(contentHeight + 10, minHeight), maxHeight);
-                        const finalWidth = Math.min(Math.max(contentWidth + 10, minWidth), maxWidth);
-                        
-                        const heightDifference = Math.abs(finalHeight - lastHeight);
-                        const widthDifference = Math.abs(finalWidth - lastWidth);
-                        
-                        if (heightDifference > 5 || widthDifference > 5 || lastHeight === 0 || lastWidth === 0) {
-                            lastHeight = finalHeight; lastWidth = finalWidth;
-                            iframeEl.style.height = finalHeight + 'px';
-                            iframeEl.style.width = finalWidth + 'px';
-                            
+                        if (shouldScroll) {
                             const chatWindow = document.getElementById('chatWindow');
-                            if (chatWindow) setTimeout(() => scrollToBottom(chatWindow), 100);
+                            if (chatWindow) setTimeout(() => scrollToBottom(chatWindow), 50);
                         }
 
-                        body.style.height = originalBodyStyle.height; body.style.width = originalBodyStyle.width; body.style.overflow = originalBodyStyle.overflow;
-                        html.style.height = originalHtmlStyle.height; html.style.width = originalHtmlStyle.width; html.style.overflow = originalHtmlStyle.overflow;
-                        
                     } catch (e) {
-                        console.warn("Could not calculate iframe dimensions:", e);
-                        if (lastHeight === 0 || lastWidth === 0) { iframeEl.style.height = '200px'; iframeEl.style.width = '400px'; lastHeight = 200; lastWidth = 400; }
-                    } finally { isResizing = false; }
+                        console.warn("Error during iframe dimension calculation:", e);
+                    } finally {
+                        isResizing = false;
+                    }
                 }, 150);
-            } else { isResizing = false; }
+            } else {
+                isResizing = false;
+            }
         } catch (e) {
-            console.warn("Could not auto-resize iframe:", e);
-            if (lastHeight === 0 || lastWidth === 0) { iframeEl.style.height = '200px'; iframeEl.style.width = '400px'; lastHeight = 200; lastWidth = 400; }
+            console.warn("Could not access iframe content for resizing:", e);
             isResizing = false;
         }
     };
 
-    let resizeTimeout;
-    const debouncedResize = (iframeEl) => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(() => { if (resizeAttempts < maxResizeAttempts) { resizeAttempts++; resizeIframe(iframeEl); } }, 200); };
+    let debounceTimeout;
+    const debouncedResize = (iframeEl) => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => resizeIframe(iframeEl, false), 200);
+    };
 
     iframe.onload = function() {
-        resizeAttempts = 0;
-        setTimeout(() => resizeIframe(this), 100);
-        setTimeout(() => resizeIframe(this), 300);
-        setTimeout(() => resizeIframe(this), 600);
+        setTimeout(() => resizeIframe(this, isInitialLoad), 100);
+        isInitialLoad = false;
+        
         try {
             const iframeDoc = this.contentDocument || this.contentWindow.document;
             if (iframeDoc && iframeDoc.body) {
                 const observer = new MutationObserver(() => debouncedResize(this));
-                observer.observe(iframeDoc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'width', 'height'] });
-                if (this.contentWindow) { let windowResizeTimeout; this.contentWindow.addEventListener('resize', () => { clearTimeout(windowResizeTimeout); windowResizeTimeout = setTimeout(() => debouncedResize(this), 300); }); }
+                observer.observe(iframeDoc.body, { childList: true, subtree: true, attributes: true });
             }
-        } catch (e) { console.warn("Could not set up iframe observers:", e); }
+        } catch (e) {
+            console.warn("Could not set up iframe mutation observer:", e);
+        }
     };
-    iframe.onerror = function() { this.style.height = '200px'; this.style.width = '400px'; lastHeight = 200; lastWidth = 400; };
 }
 
-// FULLY REFACTORED: This function relies ONLY on currentAigent.presentationFormat
+
 function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'normal') {
     const chatWindow = document.getElementById('chatWindow');
     const chatMessagesDiv = document.getElementById('chatMessages');
@@ -285,27 +258,61 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     if (type === 'info') messageWrapper.classList.add('info');
 
     if (normalizedRole === 'aigent') {
-        // The rendering logic is now data-driven, not name-driven.
         switch (currentAigent.presentationFormat) {
             case 'html':
                 messageWrapper.classList.add('html-content');
                 const htmlRegex = /<html.*?>([\s\S]*)<\/html>/i;
-                let htmlContent = text.match(htmlRegex) ? text : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #fff; word-wrap: break-word; overflow-wrap: break-word; width: auto; height: auto; min-width: 250px; box-sizing: border-box; } * { box-sizing: border-box; } img { max-width: 100%; height: auto; } pre { white-space: pre-wrap; word-wrap: break-word; max-width: 100%; } html, body { overflow-x: hidden; overflow-y: hidden; } html { height: auto !important; width: auto !important; }</style></head><body>${text}</body></html>`;
+                let htmlContent = text.match(htmlRegex) ? text : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #fff; word-wrap: break-word; overflow-wrap: break-word; width: auto; height: auto; min-width: 400px; box-sizing: border-box; } * { box-sizing: border-box; } img { max-width: 100%; height: auto; } pre { white-space: pre-wrap; word-wrap: break-word; max-width: 100%; } html, body { overflow-x: hidden; overflow-y: hidden; } html { height: auto !important; width: auto !important; }</style></head><body>${text}</body></html>`;
 
                 const widgetContainer = document.createElement('div');
                 widgetContainer.className = 'html-widget-container';
+                
+                // UPDATED: Logic for minimized state and restore button
+                const minimisedMessageDiv = document.createElement('div');
+                minimisedMessageDiv.className = 'minimised-widget-message';
+                minimisedMessageDiv.style.display = 'none';
+
+                const minimisedText = document.createElement('span');
+                minimisedText.textContent = 'Interactive message minimized.';
+
+                const restoreBtn = document.createElement('button');
+                restoreBtn.className = 'widget-restore-btn';
+                restoreBtn.title = 'Restore Widget';
+                restoreBtn.innerHTML = '↻ Restore';
+
+                minimisedMessageDiv.appendChild(minimisedText);
+                minimisedMessageDiv.appendChild(restoreBtn);
+
                 const copyBtn = document.createElement('button'); copyBtn.className = 'widget-copy-btn'; copyBtn.title = 'Copy HTML Source'; copyBtn.innerHTML = '📋';
                 copyBtn.onclick = () => { navigator.clipboard.writeText(htmlContent).then(() => { copyBtn.innerHTML = '✅'; setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000); }).catch(err => { copyBtn.innerHTML = '❌'; setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000); }); };
+                
                 const refreshBtn = document.createElement('button'); refreshBtn.className = 'widget-refresh-btn'; refreshBtn.title = 'Refresh Widget'; refreshBtn.innerHTML = '↻';
-                const stopBtn = document.createElement('button'); stopBtn.className = 'widget-stop-btn'; stopBtn.title = 'Stop Widget Execution'; stopBtn.innerHTML = '■';
+                
+                const stopBtn = document.createElement('button'); stopBtn.className = 'widget-stop-btn'; stopBtn.title = 'Minimize Widget'; stopBtn.innerHTML = '■';
+                
                 const iframe = document.createElement('iframe'); iframe.setAttribute('frameborder', '0'); iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
                 
-                stopBtn.onclick = () => { iframe.src = 'about:blank'; };
-                refreshBtn.onclick = () => { if (copyBtn.innerHTML !== '📋') { copyBtn.innerHTML = '📋'; } iframe.srcdoc = htmlContent; };
+                stopBtn.onclick = () => {
+                    iframe.srcdoc = '';
+                    widgetContainer.style.display = 'none';
+                    minimisedMessageDiv.style.display = 'flex';
+                };
+
+                const restoreAction = () => {
+                    if (copyBtn.innerHTML !== '📋') { copyBtn.innerHTML = '📋'; }
+                    minimisedMessageDiv.style.display = 'none';
+                    widgetContainer.style.display = 'block';
+                    iframe.srcdoc = htmlContent;
+                };
+
+                refreshBtn.onclick = restoreAction;
+                restoreBtn.onclick = restoreAction;
                 
                 setupAutoResizingIframe(iframe, htmlContent);
                 widgetContainer.append(copyBtn, refreshBtn, stopBtn, iframe);
+                
                 messageWrapper.appendChild(widgetContainer);
+                messageWrapper.appendChild(minimisedMessageDiv);
                 break;
 
             case 'markdown':
@@ -324,7 +331,7 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
                 messageWrapper.appendChild(rawContentDiv);
                 break;
         }
-    } else { // Handles 'user' and 'system' messages
+    } else {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'markdown-content';
         contentDiv.textContent = text;
@@ -333,7 +340,7 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     
     chatMessagesDiv.appendChild(messageWrapper);
     if (doScroll) {
-        setTimeout(() => scrollToBottom(chatWindow), 800);
+        setTimeout(() => scrollToBottom(chatWindow), 50);
     }
 }
 
