@@ -39,3 +39,4 @@ htmlcov/
 # Build artifacts
 build/
 dist/
+codebase
