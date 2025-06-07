@@ -6,15 +6,36 @@
     <title>LBA Chat</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    
+    <!-- Markdown processing libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- ADDED: Syntax Highlighting library and themes -->
+    <link id="hljs-light-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <link id="hljs-dark-theme" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" disabled>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>LBA Chat</h1>
             <div class="user-info">
-                Logged in as: <span id="usernameDisplay"></span>
-                <a href="{% url 'password_change_page' %}" class="nav-link">Change Password</a> {# ADDED LINK #}
-                <button id="logoutButton" style="margin-left: 10px;">Logout</button>
+                <span>Logged in as: <strong id="usernameDisplay"></strong></span>
+                <a href="{% url 'password_change_page' %}" class="nav-link">Change Password</a>
+                <button id="logoutButton">Logout</button>
+                <button id="themeToggleBtn" class="theme-toggle-button" title="Toggle Theme">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <g class="theme-icon-rays" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <line x1="12" y1="1" x2="12" y2="3"/> <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/> <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/> <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/> <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                      </g>
+                      <circle cx="12" cy="12" r="5" fill="currentColor"/>
+                      <circle cx="15" cy="9" r="4" class="theme-icon-cutout" fill="var(--bg-primary)"/>
+                    </svg>
+                </button>
             </div>
         </header>
         
@@ -29,8 +50,6 @@
             <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" required>
             <button type="submit">Send</button>
         </form>
-
-        <!-- PASSWORD CHANGE SECTION REMOVED FROM HERE -->
     </div>
 
     <script src="{% static 'js/app.js' %}"></script>

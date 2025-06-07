@@ -1,27 +1,146 @@
+/* --- THEME DEFINITIONS & CSS VARIABLES --- */
+:root, html[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f0f2f5;
+    --text-primary: #1c1e21;
+    --text-secondary: #606770;
+    --accent-primary: #1877f2;
+    --accent-hover: #166fe5;
+    --border-color: #dddfe2;
+    --shadow-color: rgba(0,0,0,0.1);
+    
+    --user-message-bg: #0084ff;
+    --user-message-text: #ffffff;
+    --aigent-message-bg: #e4e6eb;
+    --aigent-message-text: #050505;
+    
+    --success-bg: #d1e7dd;
+    --success-text: #0f5132;
+    --success-border: #badbcc;
+    --error-bg: #ffebeB;
+    --error-text: #fa383e;
+    --error-border: #ffc4c4;
+    --info-bg: #cff4fc;
+    --info-text: #055160;
+    --info-border: #b6effb;
+
+    --chat-window-height: 65vh;
+    --container-max-width: 800px;
+    
+    /* Scrollbar Colors */
+    --scrollbar-track-color: var(--bg-secondary);
+    --scrollbar-thumb-color: #c1c1c1;
+
+    /* Code Block BG Color */
+    --code-bg: #f1f1f1;
+}
+
+html[data-theme="dark"] {
+    --bg-primary: #242526;
+    --bg-secondary: #18191a;
+    --text-primary: #e4e6eb;
+    --text-secondary: #b0b3b8;
+    --accent-primary: #2d88ff;
+    --accent-hover: #4ea0ff;
+    --border-color: #3e4042;
+    --shadow-color: rgba(0,0,0,0.3);
+    
+    --user-message-bg: #2d88ff;
+    --user-message-text: #ffffff;
+    --aigent-message-bg: #3a3b3c;
+    --aigent-message-text: #e4e6eb;
+    
+    --success-bg: #1e4633;
+    --success-text: #8dffc7;
+    --success-border: #2a6347;
+    --error-bg: #5c1b1b;
+    --error-text: #ffb1b1;
+    --error-border: #8d2e2e;
+    --info-bg: #1c4a55;
+    --info-text: #9fe9ff;
+    --info-border: #2e7a8c;
+
+    /* Scrollbar Colors */
+    --scrollbar-track-color: var(--bg-secondary);
+    --scrollbar-thumb-color: #4b4d4f;
+    
+    /* Code Block BG Color */
+    --code-bg: #2f3031;
+}
+
+html[data-theme="memphis"] {
+    --bg-primary: #fefcfd;
+    --bg-secondary: #c6d8d3;
+    --text-primary: #001219;
+    --text-secondary: #5e6472;
+    --accent-primary: #fa383e;
+    --accent-hover: #d91c22;
+    --border-color: #001219;
+    --shadow-color: #001219;
+
+    --user-message-bg: #fca311;
+    --user-message-text: #001219;
+    --aigent-message-bg: #e0fbfc;
+    --aigent-message-text: #001219;
+
+    --success-bg: #d1e7dd;
+    --success-text: #0f5132;
+    --success-border: #0f5132;
+    --error-bg: #f7cad0;
+    --error-text: #c1121f;
+    --error-border: #c1121f;
+    --info-bg: #ade8f4;
+    --info-text: #0077b6;
+    --info-border: #0077b6;
+
+    /* Scrollbar Colors */
+    --scrollbar-track-color: var(--bg-secondary);
+    --scrollbar-thumb-color: #fca311;
+    
+    /* Code Block BG Color */
+    --code-bg: #e0fbfc;
+}
+/* --- END THEMES --- */
+
+
+/* --- GENERAL STYLES (Using Variables) --- */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    background-color: #f0f2f5; /* Slightly softer background */
-    color: #1c1e21; /* Facebook-ish dark grey */
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
     display: flex;
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
     padding-top: 20px;
     box-sizing: border-box;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+html[data-theme="memphis"] body {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
 .container {
-    background-color: #ffffff;
+    background-color: var(--bg-primary);
     padding: 25px 30px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px var(--shadow-color), 0 8px 16px var(--shadow-color);
     width: 90%;
-    max-width: 700px; /* Max width for chat and forms */
+    max-width: var(--container-max-width);
+    transition: background-color 0.3s, border 0.3s, box-shadow 0.3s;
+    position: relative;
+}
+
+html[data-theme="memphis"] .container {
+    border: 3px solid var(--border-color);
+    box-shadow: 6px 6px 0px 0px var(--shadow-color);
+    border-radius: 4px;
 }
 
 h1, h2 {
-    color: #1877f2; /* Facebook-ish blue */
+    color: var(--accent-primary);
     margin-bottom: 20px;
 }
 h1 { text-align: center; font-size: 1.8em; }
@@ -34,33 +153,73 @@ header {
     align-items: center;
     margin-bottom: 25px;
     padding-bottom: 15px;
-    border-bottom: 1px solid #dddfe2; /* Softer border */
+    border-bottom: 1px solid var(--border-color);
 }
 
 .user-info {
     font-size: 0.95em;
-    color: #606770; /* Medium grey for user info */
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
+    gap: 15px;
 }
 
 .user-info #usernameDisplay {
     font-weight: 600;
-    margin-right: 15px;
 }
 
 .nav-link {
     text-decoration: none;
-    color: #1877f2;
-    margin-right: 15px;
+    color: var(--accent-primary);
     font-weight: 500;
 }
 .nav-link:hover {
     text-decoration: underline;
 }
 
-#logoutButton, form button[type="submit"] { /* Target submit buttons specifically */
-    background-color: #1877f2;
+.theme-toggle-button {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.2s ease, background-color 0.2s, color 0.2s;
+}
+.theme-toggle-button:hover {
+    transform: scale(1.1);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+/* --- SVG Icon Styling --- */
+.theme-toggle-button svg {
+    transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+.theme-toggle-button .theme-icon-rays {
+    transition: opacity 0.3s ease-in-out;
+}
+.theme-toggle-button .theme-icon-cutout {
+    transition: fill 0.3s;
+}
+
+html[data-theme="light"] .theme-toggle-button svg { transform: rotate(0deg); }
+html[data-theme="light"] .theme-toggle-button .theme-icon-rays { opacity: 1; }
+
+html[data-theme="dark"] .theme-toggle-button svg { transform: rotate(45deg); }
+html[data-theme="dark"] .theme-toggle-button .theme-icon-rays { opacity: 0; }
+
+html[data-theme="memphis"] .theme-toggle-button svg { transform: rotate(90deg); }
+html[data-theme="memphis"] .theme-toggle-button .theme-icon-rays { opacity: 1; }
+/* --- End SVG Icon Styling --- */
+
+
+#logoutButton, form button[type="submit"] {
+    background-color: var(--accent-primary);
     color: white;
     border: none;
     padding: 10px 18px;
@@ -71,8 +230,13 @@ header {
     transition: background-color 0.2s ease-in-out;
 }
 
+html[data-theme="memphis"] form button[type="submit"] {
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+}
+
 #logoutButton:hover, form button[type="submit"]:hover {
-    background-color: #166fe5; /* Slightly darker blue on hover */
+    background-color: var(--accent-hover);
 }
 
 #loginForm div, #passwordChangeForm div {
@@ -84,22 +248,27 @@ header {
     margin-bottom: 6px;
     font-weight: 600;
     font-size: 0.9em;
-    color: #606770;
+    color: var(--text-secondary);
 }
 
 #loginForm input[type="text"],
 #loginForm input[type="password"],
 #passwordChangeForm input[type="password"],
 #messageInput {
-    width: calc(100% - 24px); /* Account for padding */
+    width: calc(100% - 24px);
     padding: 12px;
-    border: 1px solid #dddfe2;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     border-radius: 6px;
     font-size: 1em;
-    box-sizing: border-box; /* Important for width calculation */
+    box-sizing: border-box;
 }
-#messageInput { width: 100%; } /* Full width for message input */
+#messageInput { width: 100%; }
 
+html[data-theme="memphis"] input {
+    border-width: 2px;
+}
 
 .error-message, .status-message {
     font-size: 0.9em;
@@ -107,22 +276,50 @@ header {
     padding: 8px;
     border-radius: 4px;
 }
-.error-message { color: #fa383e; background-color: #ffebeB; border: 1px solid #ffc4c4; }
-.success-message { color: #0f5132; background-color: #d1e7dd; border: 1px solid #badbcc;}
-.info-message { color: #055160; background-color: #cff4fc; border: 1px solid #b6effb;}
+.error-message { color: var(--error-text); background-color: var(--error-bg); border: 1px solid var(--error-border); }
+.success-message { color: var(--success-text); background-color: var(--success-bg); border: 1px solid var(--success-border);}
+.info-message { color: var(--info-text); background-color: var(--info-bg); border: 1px solid var(--info-border);}
 
+html[data-theme="memphis"] .error-message,
+html[data-theme="memphis"] .success-message,
+html[data-theme="memphis"] .info-message {
+    border-width: 2px;
+}
 
 /* Chat specific styles */
 #chatWindow {
-    height: 450px; /* Increased height */
-    border: 1px solid #dddfe2;
+    height: var(--chat-window-height);
+    border: 1px solid var(--border-color);
     overflow-y: auto;
     padding: 15px;
     margin-bottom: 15px;
-    background-color: #f0f2f5; /* Match body background */
+    background-color: var(--bg-secondary);
     display: flex;
     flex-direction: column;
     border-radius: 6px;
+
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track-color);
+}
+
+#chatWindow::-webkit-scrollbar {
+    width: 8px;
+}
+#chatWindow::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-color);
+    border-radius: 4px;
+}
+#chatWindow::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-color);
+    border-radius: 4px;
+}
+#chatWindow::-webkit-scrollbar-thumb:hover {
+    opacity: 0.8;
+}
+
+
+html[data-theme="memphis"] #chatWindow {
+    border-width: 3px;
 }
 
 #chatMessages {
@@ -133,33 +330,40 @@ header {
 
 .message {
     padding: 10px 15px;
-    border-radius: 18px; /* More rounded messages */
+    border-radius: 18px;
     margin-bottom: 10px;
     max-width: 75%;
     word-wrap: break-word;
     line-height: 1.4;
     font-size: 0.95em;
+    transition: background-color 0.3s, color 0.3s;
 }
 
+.message p { margin: 0; }
 .message.user {
-    background-color: #0084ff; /* Brighter blue for user */
-    color: white;
+    background-color: var(--user-message-bg);
+    color: var(--user-message-text);
     align-self: flex-end;
     margin-left: auto;
-    border-bottom-right-radius: 5px; /* Slightly different shape */
+    border-bottom-right-radius: 5px;
 }
 
 .message.aigent {
-    background-color: #e4e6eb; /* Light grey for aigent */
-    color: #050505; /* Darker text for aigent messages */
+    background-color: var(--aigent-message-bg);
+    color: var(--aigent-message-text);
     align-self: flex-start;
     margin-right: auto;
-    border-bottom-left-radius: 5px; /* Slightly different shape */
+    border-bottom-left-radius: 5px;
 }
 
-.message.system { /* For system messages like errors */
-    background-color: #fdf0d5;
-    color: #c67700;
+html[data-theme="memphis"] .message {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.message.system {
+    background-color: var(--info-bg);
+    color: var(--info-text);
     align-self: center;
     text-align: center;
     font-style: italic;
@@ -167,25 +371,69 @@ header {
     max-width: 90%;
     width: fit-content;
     padding: 6px 10px;
+    border: 1px solid var(--info-border);
 }
 .message.system.error {
-    background-color: #ffebeB;
-    color: #fa383e;
-    border: 1px solid #ffc4c4;
-}
-.message.system.info {
-    background-color: #cff4fc;
-    color: #055160;
-    border: 1px solid #b6effb;
+    background-color: var(--error-bg);
+    color: var(--error-text);
+    border: 1px solid var(--error-border);
 }
 
+/* --- Markdown Specific Styles --- */
+.message.aigent p {
+    margin-bottom: 1em;
+}
+.message.aigent p:last-child {
+    margin-bottom: 0;
+}
+.message.aigent a {
+    color: var(--accent-primary);
+    text-decoration: underline;
+}
+.message.aigent ul, .message.aigent ol {
+    padding-left: 20px;
+    margin-top: 0.5em;
+    margin-bottom: 1em;
+}
+.message.aigent li {
+    margin-bottom: 0.4em;
+}
 
-.message .sender { /* No longer using this, role implied by style */
-    display: none; 
+.message.aigent pre {
+    background-color: var(--code-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
-.message p {
-    margin: 0;
+
+.message.aigent pre code.hljs {
+    padding: 0;
+    background-color: transparent;
+    border-radius: 0;
 }
+
+.message.aigent code:not(pre > code) {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: var(--code-bg);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--text-primary);
+}
+
+.message.aigent blockquote {
+    border-left: 3px solid var(--accent-primary);
+    padding-left: 15px;
+    margin-left: 5px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+/* --- End Markdown Styles --- */
 
 
 #messageForm {
@@ -193,33 +441,32 @@ header {
     margin-bottom: 20px;
 }
 
-#messageForm #messageInput { /* Ensure this is targeted specifically */
+#messageForm #messageInput {
     flex-grow: 1;
-    border-radius: 18px 0 0 18px; /* Rounded input */
+    border-radius: 18px 0 0 18px;
     padding-left: 15px;
-    margin-right: -1px; /* Overlap border with button */
+    margin-right: -1px;
 }
 
 #messageForm button[type="submit"] {
-    border-radius: 0 18px 18px 0; /* Rounded button to match */
+    border-radius: 0 18px 18px 0;
     padding: 12px 20px;
 }
 
 #typingIndicator {
     font-style: italic;
-    color: #606770;
+    color: var(--text-secondary);
     padding: 8px 0;
-    text-align: left; /* Align to left like aigent messages */
+    text-align: left;
     margin-left: 15px;
     font-size: 0.9em;
 }
 
-/* Password Change Page Specific */
 .password-change-form-container {
     margin-top: 30px;
     padding-top: 20px;
-    border-top: 1px solid #dddfe2;
+    border-top: 1px solid var(--border-color);
 }
-.password-change-form-container h1 { /* If h1 is used on this page */
+.password-change-form-container h1 {
     font-size: 1.6em;
 }

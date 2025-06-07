@@ -9,6 +9,18 @@
 </head>
 <body>
     <div class="container">
+        <button id="themeToggleBtn" class="theme-toggle-button" title="Toggle Theme" style="position: absolute; top: 20px; right: 20px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g class="theme-icon-rays" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="12" y1="1" x2="12" y2="3"/> <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/> <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/> <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/> <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </g>
+            <circle cx="12" cy="12" r="5" fill="currentColor"/>
+            <circle cx="15" cy="9" r="4" class="theme-icon-cutout" fill="var(--bg-primary)"/>
+            </svg>
+        </button>
         <h1>Local Business Assistant - Login</h1>
         <form id="loginForm">
             <div>
@@ -24,8 +36,9 @@
         <p id="loginError" class="error-message" style="display:none;"></p>
     </div>
 
+    <script src="{% static 'js/app.js' %}"></script>
     <script>
-        // Basic JS for login. More advanced logic will be in app.js for the chat page.
+        // Inline script for login page functionality
         document.getElementById('loginForm').addEventListener('submit', async function(event) {
             event.preventDefault();
             const username = document.getElementById('username').value;
@@ -37,10 +50,7 @@
             try {
                 const response = await fetch('/api/v1/auth/token/', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        // 'X-CSRFToken': getCSRFToken() // Usually not needed for DRF token auth if session auth is not primary
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
@@ -49,8 +59,8 @@
                 if (response.ok) {
                     localStorage.setItem('accessToken', data.access);
                     localStorage.setItem('refreshToken', data.refresh);
-                    localStorage.setItem('username', username); // Store username for display
-                    window.location.href = '/chat/'; // Redirect to chat page
+                    localStorage.setItem('username', username);
+                    window.location.href = '/chat/';
                 } else {
                     let errorMessage = "Login failed. Please check your credentials.";
                     if (data.detail) {
@@ -69,13 +79,6 @@
                 loginErrorElement.style.display = 'block';
             }
         });
-
-        // Helper to get CSRF token if needed (e.g. if SessionAuthentication is also enabled)
-        // For pure JWT, this is often not required for token endpoint.
-        // function getCSRFToken() {
-        //     const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        //     return csrfToken ? csrfToken.value : null;
-        // }
     </script>
 </body>
 </html>
