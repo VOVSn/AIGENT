@@ -2,7 +2,7 @@ import asyncio
 import httpx
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from celery import shared_task
 from asgiref.sync import sync_to_async
@@ -15,7 +15,8 @@ User = get_user_model()
 app_logger = logging.getLogger('aigents')
 llm_logger = logging.getLogger('llm_logger')
 
-# Convert sync functions to async versions
+# --- Async Wrappers for DB operations ---
+
 @sync_to_async
 def get_required_objects_sync(user_id_sync: int):
     try:
@@ -75,6 +76,23 @@ def update_chat_history_sync(user, active_aigent, user_message_content, answer_t
     history_obj.save()
     app_logger.info(f"Chat history updated for user {user.id} with aigent {active_aigent.id}")
 
+@sync_to_async
+def update_states_sync(user, aigent, new_user_state, new_aigent_state):
+    """Saves the updated user and aigent states to the database."""
+    try:
+        if isinstance(new_user_state, dict):
+            user.user_state = new_user_state
+            user.save(update_fields=['user_state'])
+        
+        if isinstance(new_aigent_state, dict):
+            aigent.aigent_state = new_aigent_state
+            aigent.save(update_fields=['aigent_state'])
+
+        app_logger.info(f"Successfully updated states for user {user.id} and aigent {aigent.id}")
+    except Exception as e:
+        app_logger.error(f"Failed to update states for user {user.id}: {str(e)}")
+        raise
+
 # Async function for HTTP requests
 async def make_ollama_request(url, payload, timeout):
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -88,17 +106,15 @@ async def process_message_async(user_id: int, user_message_content: str, task_id
     Fully async function that handles the entire message processing workflow
     """
     try:
-        # 1. Get required objects asynchronously
         active_aigent, user, prompt_template_obj = await get_required_objects_sync(user_id)
         app_logger.info(f"Task {task_id}: Found active Aigent: {active_aigent.name}, User: {user.username}, Prompt: {prompt_template_obj.name}")
 
-        # 2. Prepare data asynchronously
         user_state_str = await serialize_user_state_sync(user)
         aigent_state_str = await serialize_aigent_state_sync(active_aigent)
         formatted_chat_history_str = await get_formatted_chat_history_sync(user, active_aigent)
 
-        # 3. Build prompt synchronously (no DB access)
         prompt_placeholders = {
+            "current_utc_datetime": datetime.now(timezone.utc).isoformat(),
             "system_persona_prompt": active_aigent.system_persona_prompt,
             "user_state": user_state_str,
             "chat_history": formatted_chat_history_str,
@@ -106,37 +122,27 @@ async def process_message_async(user_id: int, user_message_content: str, task_id
             "aigent_state": aigent_state_str,
         }
         full_prompt = prompt_template_obj.template_str.format(**prompt_placeholders)
-        llm_logger.info(f"--- LLM PROMPT (Task: {task_id}, User: {user.id}, Aigent: {active_aigent.id}) ---\n{full_prompt}\n-------------------------")
+        llm_logger.info(f"--- LLM PROMPT (Task: {task_id}) ---\n{full_prompt}\n---")
 
-        # 4. Validate Ollama configuration
         if not active_aigent.ollama_endpoints or not isinstance(active_aigent.ollama_endpoints, list) or not active_aigent.ollama_endpoints[0]:
-            err_msg = f"Aigent '{active_aigent.name}' has no valid Ollama endpoints configured."
-            app_logger.error(f"Task {task_id}: {err_msg}")
-            raise ValueError(err_msg)
+            raise ValueError(f"Aigent '{active_aigent.name}' has no valid Ollama endpoints configured.")
         
         ollama_api_url_base = active_aigent.ollama_endpoints[0]
         ollama_api_url_target = f"{ollama_api_url_base.rstrip('/')}/api/generate"
 
-        # 5. Prepare payload
         payload = {"model": active_aigent.ollama_model_name, "prompt": full_prompt, "stream": False, "format": "json", "options": {}}
-        if active_aigent.ollama_temperature is not None: 
-            payload["options"]["temperature"] = active_aigent.ollama_temperature
-        if active_aigent.ollama_context_length is not None: 
-            payload["options"]["num_ctx"] = active_aigent.ollama_context_length
-        if not payload["options"]: 
-            del payload["options"]
+        if active_aigent.ollama_temperature is not None: payload["options"]["temperature"] = active_aigent.ollama_temperature
+        if active_aigent.ollama_context_length is not None: payload["options"]["num_ctx"] = active_aigent.ollama_context_length
+        if not payload["options"]: del payload["options"]
 
-        # 6. Make HTTP request asynchronously
-        app_logger.info(f"Task {task_id}: Sending request to Ollama: {ollama_api_url_target} with model {payload['model']}")
+        app_logger.info(f"Task {task_id}: Sending request to Ollama...")
         ollama_data = await make_ollama_request(ollama_api_url_target, payload, active_aigent.request_timeout_seconds)
         
-        # 7. Process response
         llm_json_output_str = ollama_data.get("response")
         if not llm_json_output_str:
-            llm_logger.error(f"Task {task_id}: Ollama response missing 'response' field. Raw: {str(ollama_data)[:500]}")
             raise ValueError("Ollama response missing 'response' field.")
         
-        llm_logger.info(f"--- LLM RAW JSON RESPONSE (Task: {task_id}) ---\n{llm_json_output_str}\n-------------------------")
+        llm_logger.info(f"--- LLM RAW JSON RESPONSE (Task: {task_id}) ---\n{llm_json_output_str}\n---")
         
         structured_llm_output = json.loads(llm_json_output_str)
         required_keys = ["answer_to_user", "updated_aigent_state", "updated_user_state"]
@@ -144,22 +150,24 @@ async def process_message_async(user_id: int, user_message_content: str, task_id
             missing = [key for key in required_keys if key not in structured_llm_output]
             raise ValueError(f"Ollama JSON output missing keys: {missing}. Got: {list(structured_llm_output.keys())}")
         
-        # 8. Update chat history asynchronously
+        updated_user_state = structured_llm_output["updated_user_state"]
+        updated_aigent_state = structured_llm_output["updated_aigent_state"]
         answer_to_user = structured_llm_output["answer_to_user"]
+
+        await update_states_sync(user, active_aigent, updated_user_state, updated_aigent_state)
         await update_chat_history_sync(user, active_aigent, user_message_content, answer_to_user)
         
-        app_logger.info(f"Task {task_id} successful. Answer: '{str(answer_to_user)[:100]}...'")
+        app_logger.info(f"Task {task_id} successful.")
         return {
             "answer_to_user": answer_to_user, 
-            "updated_aigent_state_debug": structured_llm_output["updated_aigent_state"], 
-            "updated_user_state_debug": structured_llm_output["updated_user_state"]
+            "updated_aigent_state_debug": updated_aigent_state, 
+            "updated_user_state_debug": updated_user_state
         }
-        
     except Exception as e:
-        # Re-raise with task context
         raise type(e)(f"Task {task_id}: {str(e)}") from e
 
-# SYNCHRONOUS WRAPPER FUNCTIONS (for Celery tasks)
+# --- Synchronous Wrapper Functions (for Celery) ---
+
 def get_required_objects_wrapper(user_id: int):
     try:
         user = User.objects.get(pk=user_id)
@@ -214,6 +222,22 @@ def update_chat_history_wrapper(user, active_aigent, user_message_content, answe
     history_obj.save()
     app_logger.info(f"Chat history updated for user {user.id} with aigent {active_aigent.id}")
 
+def update_states_wrapper(user, aigent, new_user_state, new_aigent_state):
+    """Synchronous wrapper to save updated states."""
+    try:
+        if isinstance(new_user_state, dict):
+            user.user_state = new_user_state
+            user.save(update_fields=['user_state'])
+        
+        if isinstance(new_aigent_state, dict):
+            aigent.aigent_state = new_aigent_state
+            aigent.save(update_fields=['aigent_state'])
+        
+        app_logger.info(f"Updated states for user {user.id} and aigent {aigent.id}")
+    except Exception as e:
+        app_logger.error(f"Failed to update states for user {user.id} in wrapper: {str(e)}")
+        raise
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def process_user_message_to_aigent(self, user_id: int, user_message_content: str):
     """
@@ -223,17 +247,18 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
     app_logger.info(f"Task {task_id} [process_user_message_to_aigent] started for user_id: {user_id}, message: '{user_message_content[:50]}...' (Attempt: {self.request.retries + 1})")
     
     try:
-        # 1. Get required objects synchronously
+        # 1. Get required objects
         active_aigent, user, prompt_template_obj = get_required_objects_wrapper(user_id)
         app_logger.info(f"Task {task_id}: Found active Aigent: {active_aigent.name}, User: {user.username}, Prompt: {prompt_template_obj.name}")
 
-        # 2. Prepare data synchronously
+        # 2. Prepare data
         user_state_str = serialize_user_state_wrapper(user)
         aigent_state_str = serialize_aigent_state_wrapper(active_aigent)
         formatted_chat_history_str = get_formatted_chat_history_wrapper(user, active_aigent)
 
-        # 3. Build prompt synchronously (no DB access)
+        # 3. Build prompt
         prompt_placeholders = {
+            "current_utc_datetime": datetime.now(timezone.utc).isoformat(),
             "system_persona_prompt": active_aigent.system_persona_prompt,
             "user_state": user_state_str,
             "chat_history": formatted_chat_history_str,
@@ -241,38 +266,31 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             "aigent_state": aigent_state_str,
         }
         full_prompt = prompt_template_obj.template_str.format(**prompt_placeholders)
-        llm_logger.info(f"--- LLM PROMPT (Task: {task_id}, User: {user.id}, Aigent: {active_aigent.id}) ---\n{full_prompt}\n-------------------------")
+        llm_logger.info(f"--- LLM PROMPT (Task: {task_id}) ---\n{full_prompt}\n---")
 
         # 4. Validate Ollama configuration
         if not active_aigent.ollama_endpoints or not isinstance(active_aigent.ollama_endpoints, list) or not active_aigent.ollama_endpoints[0]:
-            err_msg = f"Aigent '{active_aigent.name}' has no valid Ollama endpoints configured."
-            app_logger.error(f"Task {task_id}: {err_msg}")
-            raise ValueError(err_msg)
+            raise ValueError(f"Aigent '{active_aigent.name}' has no valid Ollama endpoints configured.")
         
         ollama_api_url_base = active_aigent.ollama_endpoints[0]
         ollama_api_url_target = f"{ollama_api_url_base.rstrip('/')}/api/generate"
 
         # 5. Prepare payload
         payload = {"model": active_aigent.ollama_model_name, "prompt": full_prompt, "stream": False, "format": "json", "options": {}}
-        if active_aigent.ollama_temperature is not None: 
-            payload["options"]["temperature"] = active_aigent.ollama_temperature
-        if active_aigent.ollama_context_length is not None: 
-            payload["options"]["num_ctx"] = active_aigent.ollama_context_length
-        if not payload["options"]: 
-            del payload["options"]
+        if active_aigent.ollama_temperature is not None: payload["options"]["temperature"] = active_aigent.ollama_temperature
+        if active_aigent.ollama_context_length is not None: payload["options"]["num_ctx"] = active_aigent.ollama_context_length
+        if not payload["options"]: del payload["options"]
 
-        # 6. Make HTTP request asynchronously (this is the only async part)
+        # 6. Make HTTP request and process
         async def make_request_and_process():
             app_logger.info(f"Task {task_id}: Sending request to Ollama: {ollama_api_url_target} with model {payload['model']}")
             ollama_data = await make_ollama_request(ollama_api_url_target, payload, active_aigent.request_timeout_seconds)
             
-            # Process response
             llm_json_output_str = ollama_data.get("response")
             if not llm_json_output_str:
-                llm_logger.error(f"Task {task_id}: Ollama response missing 'response' field. Raw: {str(ollama_data)[:500]}")
                 raise ValueError("Ollama response missing 'response' field.")
             
-            llm_logger.info(f"--- LLM RAW JSON RESPONSE (Task: {task_id}) ---\n{llm_json_output_str}\n-------------------------")
+            llm_logger.info(f"--- LLM RAW JSON RESPONSE (Task: {task_id}) ---\n{llm_json_output_str}\n---")
             
             structured_llm_output = json.loads(llm_json_output_str)
             required_keys = ["answer_to_user", "updated_aigent_state", "updated_user_state"]
@@ -282,24 +300,29 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             
             return structured_llm_output
 
-        # Run the async part
         structured_llm_output = asyncio.run(make_request_and_process())
         
-        # 7. Update chat history synchronously
+        # 7. Persist the updated states to the database
+        updated_user_state = structured_llm_output["updated_user_state"]
+        updated_aigent_state = structured_llm_output["updated_aigent_state"]
+        update_states_wrapper(user, active_aigent, updated_user_state, updated_aigent_state)
+
+        # 8. Update chat history
         answer_to_user = structured_llm_output["answer_to_user"]
         update_chat_history_wrapper(user, active_aigent, user_message_content, answer_to_user)
         
         app_logger.info(f"Task {task_id} successful. Answer: '{str(answer_to_user)[:100]}...'")
+        
         return {
             "answer_to_user": answer_to_user, 
-            "updated_aigent_state_debug": structured_llm_output["updated_aigent_state"], 
-            "updated_user_state_debug": structured_llm_output["updated_user_state"]
+            "updated_aigent_state_debug": updated_aigent_state, 
+            "updated_user_state_debug": updated_user_state
         }
 
     except (Aigent.DoesNotExist, User.DoesNotExist, Prompt.DoesNotExist) as e:
         err_msg = f"Task {task_id} ({type(e).__name__}): {str(e)}"
         app_logger.error(err_msg)
-        raise Exception(err_msg)  # Fail, don't retry config errors
+        raise Exception(err_msg)
     
     except httpx.HTTPStatusError as e:
         err_msg = f"Ollama API request failed: {e.response.status_code} - {e.response.text[:200]}"
@@ -307,7 +330,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
         if 500 <= e.response.status_code < 600:
             app_logger.info(f"Task {task_id}: Retrying (HTTPStatusError)...")
             raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
-        raise Exception(err_msg)  # For non-retryable HTTP errors
+        raise Exception(err_msg)
     
     except httpx.RequestError as e:
         err_msg = f"Ollama request network error: {str(e)}"
@@ -315,10 +338,10 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
         app_logger.info(f"Task {task_id}: Retrying (RequestError)...")
         raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
     
-    except ValueError as e:  # JSON errors, config errors like missing endpoints
+    except ValueError as e:
         err_msg = f"Task {task_id} (ValueError): {str(e)}"
         app_logger.error(err_msg)
-        raise Exception(err_msg)  # Fail, don't retry
+        raise Exception(err_msg)
     
     except Exception as e:
         err_msg = f"Task {task_id} (Unexpected {type(e).__name__}): {str(e)}"
@@ -331,7 +354,7 @@ def ollama_ping_task(self):
     Celery task for pinging Ollama - simple async HTTP request
     """
     task_id = self.request.id
-    ping_url = "http://host.docker.internal:11434/"  # Adjust if your Ollama URL differs
+    ping_url = "http://host.docker.internal:11434/"
     
     app_logger.info(f"Task {task_id} [ollama_ping_task] started (Attempt: {self.request.retries + 1}). Pinging {ping_url}")
     
@@ -349,12 +372,10 @@ def ollama_ping_task(self):
     except httpx.HTTPStatusError as e:
         err_msg = f"Ollama ping HTTP error: {e.response.status_code} - {e.response.text[:200]}"
         app_logger.error(f"Task {task_id}: {err_msg}")
-        app_logger.info(f"Task {task_id}: Retrying ping (HTTPStatusError)...")
         raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
     except httpx.RequestError as e:
         err_msg = f"Ollama ping network error: {str(e)}"
         app_logger.error(f"Task {task_id}: {err_msg}")
-        app_logger.info(f"Task {task_id}: Retrying ping (RequestError)...")
         raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
     except Exception as e:
         err_msg = f"Task {task_id} (Unexpected {type(e).__name__} during ping): {str(e)}"
