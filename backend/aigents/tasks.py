@@ -2,7 +2,7 @@ import asyncio
 import httpx
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from celery import shared_task
 from asgiref.sync import sync_to_async
@@ -66,7 +66,7 @@ def update_chat_history_sync(user, active_aigent, user_message_content, answer_t
     )
     if not isinstance(history_obj.history, list):
         history_obj.history = []
-    timestamp = datetime.utcnow().isoformat() + "Z"
+    timestamp = datetime.now(timezone.utc).isoformat()
     history_obj.history.append({"role": "user", "content": user_message_content, "timestamp": timestamp})
     history_obj.history.append({"role": "assistant", "content": answer_to_user, "timestamp": timestamp})
     MAX_HISTORY_ENTRIES = 50
@@ -99,6 +99,7 @@ async def process_message_async(user_id: int, user_message_content: str, task_id
 
         # 3. Build prompt synchronously (no DB access)
         prompt_placeholders = {
+            "current_utc_datetime": datetime.now(timezone.utc).isoformat(),
             "system_persona_prompt": active_aigent.system_persona_prompt,
             "user_state": user_state_str,
             "chat_history": formatted_chat_history_str,
@@ -156,7 +157,6 @@ async def process_message_async(user_id: int, user_message_content: str, task_id
         }
         
     except Exception as e:
-        # Re-raise with task context
         raise type(e)(f"Task {task_id}: {str(e)}") from e
 
 # SYNCHRONOUS WRAPPER FUNCTIONS (for Celery tasks)
@@ -205,7 +205,7 @@ def update_chat_history_wrapper(user, active_aigent, user_message_content, answe
     )
     if not isinstance(history_obj.history, list):
         history_obj.history = []
-    timestamp = datetime.utcnow().isoformat() + "Z"
+    timestamp = datetime.now(timezone.utc).isoformat()
     history_obj.history.append({"role": "user", "content": user_message_content, "timestamp": timestamp})
     history_obj.history.append({"role": "assistant", "content": answer_to_user, "timestamp": timestamp})
     MAX_HISTORY_ENTRIES = 50
@@ -234,6 +234,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
 
         # 3. Build prompt synchronously (no DB access)
         prompt_placeholders = {
+            "current_utc_datetime": datetime.now(timezone.utc).isoformat(),
             "system_persona_prompt": active_aigent.system_persona_prompt,
             "user_state": user_state_str,
             "chat_history": formatted_chat_history_str,
@@ -266,7 +267,6 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             app_logger.info(f"Task {task_id}: Sending request to Ollama: {ollama_api_url_target} with model {payload['model']}")
             ollama_data = await make_ollama_request(ollama_api_url_target, payload, active_aigent.request_timeout_seconds)
             
-            # Process response
             llm_json_output_str = ollama_data.get("response")
             if not llm_json_output_str:
                 llm_logger.error(f"Task {task_id}: Ollama response missing 'response' field. Raw: {str(ollama_data)[:500]}")
@@ -299,7 +299,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
     except (Aigent.DoesNotExist, User.DoesNotExist, Prompt.DoesNotExist) as e:
         err_msg = f"Task {task_id} ({type(e).__name__}): {str(e)}"
         app_logger.error(err_msg)
-        raise Exception(err_msg)  # Fail, don't retry config errors
+        raise Exception(err_msg)
     
     except httpx.HTTPStatusError as e:
         err_msg = f"Ollama API request failed: {e.response.status_code} - {e.response.text[:200]}"
@@ -307,7 +307,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
         if 500 <= e.response.status_code < 600:
             app_logger.info(f"Task {task_id}: Retrying (HTTPStatusError)...")
             raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
-        raise Exception(err_msg)  # For non-retryable HTTP errors
+        raise Exception(err_msg)
     
     except httpx.RequestError as e:
         err_msg = f"Ollama request network error: {str(e)}"
@@ -315,10 +315,10 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
         app_logger.info(f"Task {task_id}: Retrying (RequestError)...")
         raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
     
-    except ValueError as e:  # JSON errors, config errors like missing endpoints
+    except ValueError as e:
         err_msg = f"Task {task_id} (ValueError): {str(e)}"
         app_logger.error(err_msg)
-        raise Exception(err_msg)  # Fail, don't retry
+        raise Exception(err_msg)
     
     except Exception as e:
         err_msg = f"Task {task_id} (Unexpected {type(e).__name__}): {str(e)}"
@@ -331,7 +331,7 @@ def ollama_ping_task(self):
     Celery task for pinging Ollama - simple async HTTP request
     """
     task_id = self.request.id
-    ping_url = "http://host.docker.internal:11434/"  # Adjust if your Ollama URL differs
+    ping_url = "http://host.docker.internal:11434/"
     
     app_logger.info(f"Task {task_id} [ollama_ping_task] started (Attempt: {self.request.retries + 1}). Pinging {ping_url}")
     

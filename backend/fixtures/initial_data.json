@@ -2,21 +2,32 @@
   "prompts": [
     {
       "name": "StandardChatInteraction_v1",
-      "template_str": "{system_persona_prompt}\n\nCurrent User State:\n{user_state}\n\nYour Previous Conversation with User:\n{chat_history}\n\nUser's Current Message:\n{current_user_message}\n\nYour Current Aigent State:\n{aigent_state}\n\nPlease provide a structured JSON response with the following keys: \"answer_to_user\", \"updated_aigent_state\", \"updated_user_state\".\nEnsure your entire output is a single valid JSON object.\nThe \"answer_to_user\" should be your textual reply to the user.\nThe \"updated_aigent_state\" should be your complete internal state after this interaction.\nThe \"updated_user_state\" should be the user's complete state after this interaction.\nYour JSON response:"
+      "template_str": "You are interacting with a user. Be helpful and follow all instructions.\n\nCurrent UTC Datetime: {current_utc_datetime}\n\nYour Previous Conversation with User:\n{chat_history}\n\nUser's Current Message:\n{current_user_message}\n\nYour Current Aigent State:\n{aigent_state}\n\nCurrent User State:\n{user_state}\n\n{system_persona_prompt}\n\nPlease provide a structured JSON response with the following keys: \"answer_to_user\", \"updated_aigent_state\", \"updated_user_state\".\nEnsure your entire output is a single valid JSON object.\nThe \"answer_to_user\" should be your textual reply to the user.\nThe \"updated_aigent_state\" should be your complete internal state after this interaction.\nThe \"updated_user_state\" should be the user's complete state after this interaction, which you should update based on the conversation.\nYour JSON response:"
     }
   ],
   "aigents": [
     {
       "name": "LBA Prime Assistant",
       "is_active": true,
-      "system_persona_prompt": "You are LBA-Prime, an intelligent and helpful AI assistant for company employees. Your goal is to provide accurate information and complete tasks efficiently. You are friendly, professional, and always try your best to assist the user. You can remember context from the conversation and user-specific details provided in the 'User State'.",
-      "ollama_model_name": "llama3:latest",
+      "system_persona_prompt": "You are LBA-Prime, an intelligent and helpful AI assistant for company employees. Your goal is to provide accurate information and complete tasks efficiently. You are friendly, professional, and always try your best to assist the user. You are aware of the current UTC datetime, which is provided in the prompt, and can use it for scheduling and time-related queries. You can remember context from the conversation and user-specific details provided in the 'User State'. You MUST update both the user and aigent states in your JSON response.",
+      "ollama_model_name": "phi4",
       "ollama_endpoints": ["http://host.docker.internal:11434"],
       "ollama_temperature": 0.7,
       "ollama_context_length": 4096,
       "aigent_state": {
-        "greeting_count": 0,
-        "last_interaction_type": null
+        "internal_name": "AigentCore_v1",
+        "current_goal": "Establish a helpful and productive relationship with the user.",
+        "session_topics": [],
+        "long_term_topics": [],
+        "internal_thoughts": "A new session has started. I should be welcoming and ready to assist.",
+        "emotional_state": {
+            "curiosity": 0.6,
+            "confidence": 0.7,
+            "empathy": 0.5,
+            "neutral_helpful": 0.8
+        },
+        "knowledge_gaps": [],
+        "last_interaction_summary": null
       },
       "default_prompt_template_name": "StandardChatInteraction_v1",
       "request_timeout_seconds": 120
