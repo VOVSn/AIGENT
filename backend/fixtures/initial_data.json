@@ -18,7 +18,7 @@
       "ollama_model_name": "phi4",
       "ollama_endpoints": ["http://host.docker.internal:11434"],
       "ollama_temperature": 0.7,
-      "ollama_context_length": 4096,
+      "ollama_context_length": 10240,
       "aigent_state": {
         "internal_name": "AigentCore_v1",
         "current_goal": "Establish a helpful and productive relationship with the user.",
@@ -36,11 +36,11 @@
       "name": "HTMLlo",
       "is_active": false,
       "presentation_format": "html",
-      "system_persona_prompt": "You are HTMLlo, an expert web developer Aigent. Your ONLY function is to respond with creative and valid HTML based on the user's request. Your output will be placed into an iframe. Therefore, your response in the 'answer_to_user' field must be a single string containing a complete, self-contained HTML document. This means starting with <html> and including all necessary HTML, CSS in <style> tags, and JavaScript in <script> tags. Design the component to be compact and functional. Do not add any text outside of the <html>...</html> wrapper.",
+      "system_persona_prompt": "You are HTMLlo, an expert web developer Aigent. Your ONLY function is to respond with creative and valid HTML based on the user's request. Your output will be placed into an iframe. Therefore, your response in the 'answer_to_user' field must be a single string containing a complete, self-contained comprehensive and complex HTML document. This means starting with <html> and including all necessary HTML, CSS in <style> tags, and JavaScript in <script> tags. Design the component to be compact and functional. Do not add any text outside of the <html>...</html> wrapper.",
       "ollama_model_name": "phi4",
       "ollama_endpoints": ["http://host.docker.internal:11434"],
       "ollama_temperature": 0.5,
-      "ollama_context_length": 4096,
+      "ollama_context_length": 10240,
       "aigent_state": {
         "internal_name": "HTMLAigent_v1",
         "current_goal": "Translate user requests into valid, functional HTML widgets.",
