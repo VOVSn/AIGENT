@@ -84,7 +84,8 @@ html[data-theme="memphis"] {
 /* --- END THEMES --- */
 
 /* --- GENERAL STYLES --- */
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: var(--bg-secondary); color: var(--text-primary); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding-top: 20px; box-sizing: border-box; transition: background-color 0.3s, color 0.3s; }
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: var(--bg-secondary); color: var(--text-primary); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding-top: 20px; transition: background-color 0.3s, color 0.3s; }
 .container { background-color: var(--bg-primary); padding: 25px 30px; border-radius: 8px; box-shadow: 0 2px 4px var(--shadow-color), 0 8px 16px var(--shadow-color); width: 90%; max-width: var(--container-max-width); transition: background-color 0.3s, border 0.3s, box-shadow 0.3s; position: relative; }
 header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
 h1, h2 { color: var(--accent-primary); margin-bottom: 20px; }
@@ -117,7 +118,7 @@ form button[type="submit"] { background-color: var(--accent-primary); color: whi
 form button[type="submit"]:hover { background-color: var(--accent-hover); }
 #loginForm div, #passwordChangeForm div { margin-bottom: 18px; }
 #loginForm label, #passwordChangeForm label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9em; color: var(--text-secondary); }
-#loginForm input[type="text"], #loginForm input[type="password"], #passwordChangeForm input[type="password"], #messageInput { width: calc(100% - 24px); padding: 12px; border: 1px solid var(--border-color); background-color: var(--bg-primary); color: var(--text-primary); border-radius: 6px; font-size: 1em; box-sizing: border-box; }
+#loginForm input[type="text"], #loginForm input[type="password"], #passwordChangeForm input[type="password"], #messageInput { width: 100%; padding: 12px; border: 1px solid var(--border-color); background-color: var(--bg-primary); color: var(--text-primary); border-radius: 6px; font-size: 1em; }
 #messageInput { width: 100%; }
 
 /* --- Chat Specific Styles --- */
@@ -143,21 +144,51 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
 .message.aigent code:not(pre > code) { font-family: 'Courier New', Courier, monospace; background-color: var(--code-bg); padding: 2px 4px; border-radius: 4px; font-size: 0.9em; color: var(--text-primary); }
 .message.aigent blockquote { border-left: 3px solid var(--accent-primary); padding-left: 15px; margin-left: 5px; color: var(--text-secondary); font-style: italic; }
 
-/* --- Enhanced HTML Widget Container and Iframe Styles --- */
+/* --- UPDATED HTML WIDGET SIZING & STYLING --- */
+
+/* The main bubble for an HTML widget. Increased padding for more visual inset. */
+.message.aigent.html-content {
+    padding: 15px; /* Creates more space between bubble edge and iframe */
+    background-color: var(--aigent-message-bg);
+    max-width: fit-content !important;
+    min-width: 300px !important;
+    width: auto !important;
+    display: inline-block;
+    align-self: flex-start;
+}
+
+/* Container for the iframe and its controls */
 .html-widget-container { 
     position: relative; 
     padding-top: 28px;
     width: 100%;
-    max-width: 100%;
+    height: auto;
     overflow: visible;
-    border-radius: 6px;
+    border-radius: 12px; /* Curvature inside the message bubble */
     background: transparent;
+    display: block;
+    box-shadow: inset 0 0 0 1px var(--border-color);
 }
 
+/* The iframe itself */
+.message.aigent iframe {
+    display: block;
+    border: none;
+    width: 100%;
+    min-height: 150px; 
+    max-width: 100%;
+    background-color: white;
+    border-radius: 12px; /* Match the container's curvature */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: height 0.3s ease-in-out;
+    overflow: hidden;
+}
+
+/* Common styles for widget buttons, now using Flexbox for centering */
+.widget-copy-btn,
 .widget-refresh-btn {
     position: absolute;
     top: 4px;
-    right: 4px;
     background: rgba(0,0,0,0.4);
     color: white;
     border: none;
@@ -166,55 +197,63 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
     height: 20px;
     cursor: pointer;
     font-size: 14px;
-    line-height: 20px;
-    text-align: center;
     z-index: 10;
     transition: transform 0.2s, background-color 0.2s;
+    padding: 0;
+    /* Flexbox for perfect icon centering */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.widget-refresh-btn:hover { 
-    background: rgba(0,0,0,0.6); 
-    transform: rotate(90deg); 
-}
+.widget-copy-btn { right: 4px; }
+.widget-refresh-btn { right: 32px; }
 
-.message.aigent iframe {
-    display: block;
-    border: none;
-    width: 100%;
-    min-height: 200px;
-    max-width: 100%;
-    background-color: white;
-    border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    transition: height 0.3s ease-in-out;
-    overflow: hidden;
-}
+.widget-copy-btn:hover { transform: scale(1.1); background: rgba(0,0,0,0.6); }
+.widget-refresh-btn:hover { transform: rotate(90deg); background: rgba(0,0,0,0.6); }
 
-/* Dark theme adjustments for iframes */
-html[data-theme="dark"] .message.aigent iframe {
-    background-color: var(--bg-secondary);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-}
-
+/* Dark theme adjustments */
+html[data-theme="dark"] .widget-copy-btn,
 html[data-theme="dark"] .widget-refresh-btn {
     background: rgba(255,255,255,0.2);
     color: var(--text-primary);
 }
 
+html[data-theme="dark"] .widget-copy-btn:hover,
 html[data-theme="dark"] .widget-refresh-btn:hover {
     background: rgba(255,255,255,0.3);
 }
 
-/* Memphis theme adjustments for iframes */
-html[data-theme="memphis"] .message.aigent iframe {
+html[data-theme="dark"] .message.aigent iframe {
+    background-color: var(--bg-secondary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* Memphis theme adjustments for a SINGLE outline */
+html[data-theme="memphis"] .message.aigent.html-content {
     border: 2px solid var(--border-color);
     box-shadow: 3px 3px 0px var(--shadow-color);
 }
 
+html[data-theme="memphis"] .html-widget-container {
+    box-shadow: none; /* Remove the inner container's outline */
+}
+
+html[data-theme="memphis"] .message.aigent iframe {
+    border: none; /* Remove iframe's own border */
+    box-shadow: none; /* Remove iframe's own shadow */
+}
+
+html[data-theme="memphis"] .widget-copy-btn,
 html[data-theme="memphis"] .widget-refresh-btn {
     background: var(--accent-primary);
     color: white;
     border: 2px solid var(--border-color);
+}
+
+html[data-theme="memphis"] .widget-copy-btn:hover {
+    background: var(--accent-hover);
+    transform: scale(1.2);
 }
 
 html[data-theme="memphis"] .widget-refresh-btn:hover {
@@ -222,52 +261,16 @@ html[data-theme="memphis"] .widget-refresh-btn:hover {
     transform: rotate(90deg) scale(1.1);
 }
 
-html[data-theme="memphis"] .html-widget-container {
-    border: 2px solid var(--border-color);
-    border-radius: 8px;
-}
-
-/* Responsive adjustments for smaller screens */
+/* Responsive adjustments */
 @media (max-width: 768px) {
-    .message.aigent {
-        max-width: 100%;
-        min-width: 250px;
-        width: 100%;
-    }
-    
-    .message.aigent iframe {
-        min-height: 200px;
-    }
-    
-    .container {
-        width: 95%;
-        padding: 20px 15px;
-    }
+    .message.aigent.html-content, .html-widget-container { min-width: 250px; }
 }
 
 @media (max-width: 480px) {
-    .message.aigent {
-        min-width: 200px;
-        width: 100%;
-    }
-    
-    .message.aigent iframe {
-        min-height: 150px;
-    }
+    .message.aigent.html-content, .html-widget-container { min-width: 200px; }
 }
 
-/* Better visual hierarchy for HTML widgets */
-.html-widget-container {
-    box-shadow: inset 0 0 0 1px var(--border-color);
-}
-
-html[data-theme="dark"] .html-widget-container {
-    box-shadow: inset 0 0 0 1px var(--border-color);
-}
-
-html[data-theme="memphis"] .html-widget-container {
-    box-shadow: inset 0 0 0 2px var(--border-color);
-}
+/* --- END WIDGET STYLES --- */
 
 #messageForm { display: flex; margin-bottom: 20px; }
 #messageForm #messageInput { flex-grow: 1; border-radius: 18px 0 0 18px; padding-left: 15px; margin-right: -1px; }

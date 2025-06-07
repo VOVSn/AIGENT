@@ -154,10 +154,9 @@ async function loadChatHistory() {
     }
 }
 
-// Enhanced iframe auto-sizing function - FIXED VERSION
+// Enhanced iframe auto-sizing function with message box resizing
 function setupAutoResizingIframe(iframe, htmlContent) {
     // Set initial properties
-    iframe.style.width = '100%';
     iframe.style.border = 'none';
     iframe.style.display = 'block';
     iframe.setAttribute('scrolling', 'no');
@@ -165,8 +164,9 @@ function setupAutoResizingIframe(iframe, htmlContent) {
 
     let isResizing = false;
     let lastHeight = 0;
+    let lastWidth = 0;
     let resizeAttempts = 0;
-    const maxResizeAttempts = 3;
+    const maxResizeAttempts = 5;
 
     const resizeIframe = (iframeEl) => {
         // Prevent multiple simultaneous resize operations
@@ -182,17 +182,30 @@ function setupAutoResizingIframe(iframe, htmlContent) {
                         const body = iframeDoc.body;
                         const html = iframeDoc.documentElement;
                         
-                        // Remove any existing height constraints temporarily
-                        const originalBodyStyle = body.style.height;
-                        const originalHtmlStyle = html.style.height;
+                        // Remove any existing constraints temporarily
+                        const originalBodyStyle = {
+                            height: body.style.height,
+                            width: body.style.width,
+                            overflow: body.style.overflow
+                        };
+                        const originalHtmlStyle = {
+                            height: html.style.height,
+                            width: html.style.width,
+                            overflow: html.style.overflow
+                        };
                         
                         body.style.height = 'auto';
+                        body.style.width = 'auto';
+                        body.style.overflow = 'visible';
                         html.style.height = 'auto';
+                        html.style.width = 'auto';
+                        html.style.overflow = 'visible';
                         
                         // Force a reflow
                         body.offsetHeight;
+                        body.offsetWidth;
                         
-                        // Get content dimensions using multiple methods
+                        // Get content dimensions
                         const scrollHeight = Math.max(
                             body.scrollHeight || 0,
                             body.offsetHeight || 0,
@@ -201,29 +214,52 @@ function setupAutoResizingIframe(iframe, htmlContent) {
                             html.offsetHeight || 0
                         );
                         
-                        // Get bounding box height as additional check
+                        const scrollWidth = Math.max(
+                            body.scrollWidth || 0,
+                            body.offsetWidth || 0,
+                            html.clientWidth || 0,
+                            html.scrollWidth || 0,
+                            html.offsetWidth || 0
+                        );
+                        
+                        // Get bounding box dimensions as additional check
                         let boundingHeight = 0;
+                        let boundingWidth = 0;
                         try {
-                            boundingHeight = body.getBoundingClientRect().height;
+                            const rect = body.getBoundingClientRect();
+                            boundingHeight = rect.height;
+                            boundingWidth = rect.width;
                         } catch (e) {
                             boundingHeight = 0;
+                            boundingWidth = 0;
                         }
                         
                         // Use the maximum of all measurements
                         const contentHeight = Math.max(scrollHeight, boundingHeight);
+                        const contentWidth = Math.max(scrollWidth, boundingWidth);
                         
-                        // Add some padding and set minimum/maximum constraints
-                        const minHeight = 150;
-                        const maxHeight = window.innerHeight * 0.8; // Max 80% of viewport height
-                        const finalHeight = Math.min(Math.max(contentHeight + 20, minHeight), maxHeight);
+                        // Set constraints
+                        const minHeight = 120;
+                        const maxHeight = window.innerHeight * 0.8;
+                        const minWidth = 300;
+                        const maxWidth = Math.min(window.innerWidth * 0.9, 1200);
                         
-                        // Only update if height has changed significantly (prevent micro-adjustments)
+                        const finalHeight = Math.min(Math.max(contentHeight + 10, minHeight), maxHeight);
+                        const finalWidth = Math.min(Math.max(contentWidth + 10, minWidth), maxWidth);
+                        
+                        // Only update if dimensions have changed significantly
                         const heightDifference = Math.abs(finalHeight - lastHeight);
-                        if (heightDifference > 5 || lastHeight === 0) {
+                        const widthDifference = Math.abs(finalWidth - lastWidth);
+                        
+                        if (heightDifference > 5 || widthDifference > 5 || lastHeight === 0 || lastWidth === 0) {
                             lastHeight = finalHeight;
-                            iframeEl.style.height = finalHeight + 'px';
+                            lastWidth = finalWidth;
                             
-                            console.log(`Iframe resized to: ${finalHeight}px (content: ${contentHeight}px, scroll: ${scrollHeight}px, bounding: ${boundingHeight}px)`);
+                            // Set iframe dimensions ONLY. Let CSS handle the containers.
+                            iframeEl.style.height = finalHeight + 'px';
+                            iframeEl.style.width = finalWidth + 'px';
+                            
+                            console.log(`Iframe resized to: ${finalWidth}x${finalHeight}px (content: ${contentWidth}x${contentHeight}px)`);
                             
                             // Scroll chat to bottom after resize
                             const chatWindow = document.getElementById('chatWindow');
@@ -233,35 +269,43 @@ function setupAutoResizingIframe(iframe, htmlContent) {
                         }
 
                         // Restore original styles
-                        body.style.height = originalBodyStyle;
-                        html.style.height = originalHtmlStyle;
+                        body.style.height = originalBodyStyle.height;
+                        body.style.width = originalBodyStyle.width;
+                        body.style.overflow = originalBodyStyle.overflow;
+                        html.style.height = originalHtmlStyle.height;
+                        html.style.width = originalHtmlStyle.width;
+                        html.style.overflow = originalHtmlStyle.overflow;
                         
                     } catch (e) {
                         console.warn("Could not calculate iframe dimensions:", e);
-                        // Fallback height
-                        if (lastHeight === 0) {
-                            iframeEl.style.height = '300px';
-                            lastHeight = 300;
+                        // Fallback dimensions
+                        if (lastHeight === 0 || lastWidth === 0) {
+                            iframeEl.style.height = '200px';
+                            iframeEl.style.width = '400px';
+                            lastHeight = 200;
+                            lastWidth = 400;
                         }
                     } finally {
                         isResizing = false;
                     }
-                }, 100);
+                }, 150);
             } else {
                 isResizing = false;
             }
         } catch (e) {
             console.warn("Could not auto-resize iframe:", e);
-            // Fallback height
-            if (lastHeight === 0) {
-                iframeEl.style.height = '300px';
-                lastHeight = 300;
+            // Fallback dimensions
+            if (lastHeight === 0 || lastWidth === 0) {
+                iframeEl.style.height = '200px';
+                iframeEl.style.width = '400px';
+                lastHeight = 200;
+                lastWidth = 400;
             }
             isResizing = false;
         }
     };
 
-    // Debounced resize function to prevent excessive calls
+    // Debounced resize function
     let resizeTimeout;
     const debouncedResize = (iframeEl) => {
         clearTimeout(resizeTimeout);
@@ -282,11 +326,11 @@ function setupAutoResizingIframe(iframe, htmlContent) {
         setTimeout(() => resizeIframe(this), 300);
         setTimeout(() => resizeIframe(this), 600);
         
-        // Set up mutation observer for dynamic content changes (with debouncing)
+        // Set up observers for dynamic content
         try {
             const iframeDoc = this.contentDocument || this.contentWindow.document;
             if (iframeDoc && iframeDoc.body) {
-                // Create mutation observer with debouncing
+                // Mutation observer
                 const observer = new MutationObserver(() => {
                     debouncedResize(this);
                 });
@@ -298,7 +342,7 @@ function setupAutoResizingIframe(iframe, htmlContent) {
                     attributeFilter: ['style', 'class', 'width', 'height']
                 });
                 
-                // Also observe window resize events within the iframe (debounced)
+                // Window resize observer
                 if (this.contentWindow) {
                     let windowResizeTimeout;
                     this.contentWindow.addEventListener('resize', () => {
@@ -317,12 +361,14 @@ function setupAutoResizingIframe(iframe, htmlContent) {
     // Handle errors
     iframe.onerror = function() {
         console.error("Iframe failed to load");
-        this.style.height = '300px';
-        lastHeight = 300;
+        this.style.height = '200px';
+        this.style.width = '400px';
+        lastHeight = 200;
+        lastWidth = 400;
     };
 }
 
-// Updated message appending function with improved HTML handling
+// Updated message appending function with HTML content class
 function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'normal') {
     const chatWindow = document.getElementById('chatWindow');
     const chatMessagesDiv = document.getElementById('chatMessages');
@@ -345,13 +391,16 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     if (type === 'info') messageWrapper.classList.add('info');
 
     if (normalizedRole === 'aigent' && currentAigentName === 'HTMLlo') {
+        // Add HTML content class for special styling
+        messageWrapper.classList.add('html-content');
+        
         const htmlRegex = /<html.*?>([\s\S]*)<\/html>/i;
         let htmlContent;
         
         if (text.match(htmlRegex)) {
             htmlContent = text;
         } else {
-            // Wrap non-HTML content in a proper HTML structure with better styling
+            // Wrap non-HTML content with proper structure and auto-sizing styles
             htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -368,12 +417,13 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
             background: #fff;
             word-wrap: break-word;
             overflow-wrap: break-word;
-            min-height: auto;
+            width: auto;
             height: auto;
+            min-width: 250px;
+            box-sizing: border-box;
         }
         * {
             box-sizing: border-box;
-            max-width: 100%;
         }
         img {
             max-width: 100%;
@@ -386,6 +436,12 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
         }
         html, body {
             overflow-x: hidden;
+            overflow-y: hidden;
+        }
+        /* Ensure content doesn't create unnecessary scrolling */
+        html {
+            height: auto !important;
+            width: auto !important;
         }
     </style>
 </head>
@@ -396,6 +452,21 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
         const widgetContainer = document.createElement('div');
         widgetContainer.className = 'html-widget-container';
 
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'widget-copy-btn';
+        copyBtn.title = 'Copy HTML Source';
+        copyBtn.innerHTML = '📋';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(htmlContent).then(() => {
+                copyBtn.innerHTML = '✅';
+                setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy HTML: ', err);
+                copyBtn.innerHTML = '❌';
+                setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000);
+            });
+        };
+
         const refreshBtn = document.createElement('button');
         refreshBtn.className = 'widget-refresh-btn';
         refreshBtn.title = 'Refresh Widget';
@@ -405,13 +476,17 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
         
-        // Set up auto-resizing with the fixed function
+        // Set up auto-resizing with the enhanced function
         setupAutoResizingIframe(iframe, htmlContent);
 
         refreshBtn.onclick = () => { 
+            if (copyBtn.innerHTML !== '📋') {
+                copyBtn.innerHTML = '📋';
+            }
             setupAutoResizingIframe(iframe, htmlContent);
         };
 
+        widgetContainer.appendChild(copyBtn);
         widgetContainer.appendChild(refreshBtn);
         widgetContainer.appendChild(iframe);
         messageWrapper.appendChild(widgetContainer);
@@ -432,7 +507,7 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     chatMessagesDiv.appendChild(messageWrapper);
     if (doScroll) {
         // Delay scroll to ensure iframe has time to resize
-        setTimeout(() => scrollToBottom(chatWindow), 500);
+        setTimeout(() => scrollToBottom(chatWindow), 800);
     }
 }
 
