@@ -1,9 +1,23 @@
+# users/views.py
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from users.serializers import PasswordChangeSerializer
+from rest_framework.views import APIView # ADD THIS
+from users.serializers import PasswordChangeSerializer, UserSerializer # UPDATE THIS
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+
+class MeView(APIView):
+    """
+    An endpoint to get the current authenticated user's details.
+    """
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, *args, **kwargs):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
 
 class PasswordChangeView(generics.GenericAPIView):
     """

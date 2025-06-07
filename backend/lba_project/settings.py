@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # Third-party apps
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'django_celery_beat', # For Celery Beat (scheduled tasks)
@@ -46,6 +47,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -99,11 +101,18 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
-# STATIC_ROOT = BASE_DIR / "staticfiles" # Uncomment and configure for production collectstatic
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static", # This line is key
 ]
+
+
+
+
+
+
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -248,3 +257,13 @@ LOGGING = {
 
 # Ollama Settings (loaded from .env)
 OLLAMA_DEFAULT_ENDPOINT = env('OLLAMA_DEFAULT_ENDPOINT', default='http://localhost:11434') # Fallback if not in .env
+
+
+# CORS Configuration
+# This allows your frontend (running on the Nginx container) to make API calls
+# to your backend (running on the Uvicorn container).
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8080", # The port Nginx is exposed on in docker-compose
+    "http://127.0.0.1:8080",
+]
+CORS_ALLOW_CREDENTIALS = True # To allow cookies to be sent

@@ -1,23 +1,13 @@
-"""
-URL configuration for lba_project project.
-"""
+# lba_project/urls.py
+
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-# Import the new views (adjust path if you put them in a different app's views.py)
-from aigents.views import login_page_view, ChatPageView, root_view, PasswordChangePageView
-
 
 urlpatterns = [
-    # Frontend Serving URLs
-    path('', root_view, name='root'), # Root redirects to login or chat
-    path('login/', login_page_view, name='login_page'),
-    path('chat/', ChatPageView.as_view(), name='chat_page'), # Use .as_view() for class-based views
-    path('password-change/', PasswordChangePageView.as_view(), name='password_change_page'),
-
     path('admin/', admin.site.urls),
 
     # API v1 URLs

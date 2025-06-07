@@ -191,24 +191,24 @@ class ChatHistoryView(generics.GenericAPIView):
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-# --- Template Views ---
+# # --- Template Views ---
 
-def login_page_view(request):
-    """Serves the login.html page."""
-    return render(request, 'login.html')
+# def login_page_view(request):
+#     """Serves the login.html page."""
+#     return render(request, 'login.html')
 
-class ChatPageView(LoginRequiredMixin, TemplateView):
-    """Serves the chat.html page. Requires login."""
-    template_name = 'chat.html'
-    login_url = '/login/'
+# class ChatPageView(LoginRequiredMixin, TemplateView):
+#     """Serves the chat.html page. Requires login."""
+#     template_name = 'chat.html'
+#     login_url = '/login/'
 
-def root_view(request):
-    """Redirects to the chat page if logged in, otherwise to the login page."""
-    if request.user.is_authenticated:
-        return redirect('chat_page')
-    return redirect('login_page')
+# def root_view(request):
+#     """Redirects to the chat page if logged in, otherwise to the login page."""
+#     if request.user.is_authenticated:
+#         return redirect('chat_page')
+#     return redirect('login_page')
 
-class PasswordChangePageView(LoginRequiredMixin, TemplateView):
-    """Serves the password_change.html page. Requires login."""
-    template_name = 'password_change.html'
-    login_url = '/login/'
+# class PasswordChangePageView(LoginRequiredMixin, TemplateView):
+#     """Serves the password_change.html page. Requires login."""
+#     template_name = 'password_change.html'
+#     login_url = '/login/'

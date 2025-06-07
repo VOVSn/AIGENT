@@ -26,6 +26,7 @@ RUN pip install --upgrade pip && \
 # Copy the rest of the Django project code into the container
 COPY . /app/
 
+
 # Expose the port the app runs on (Gunicorn/Django dev server)
 EXPOSE 8000
 

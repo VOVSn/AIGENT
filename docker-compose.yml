@@ -1,4 +1,133 @@
+# docker-compose.yml
+
+version: '3.8'
+
 services:
+  #################################################
+  # NGINX - PUBLIC ENTRYPOINT & FRONTEND SERVER
+  #################################################
+  nginx:
+    # This service is the main entry point for all web traffic.
+    # It serves the static frontend files and reverse-proxies API calls to the backend.
+    build:
+      context: ./frontend
+    container_name: aigent_nginx
+    ports:
+      - "8080:80" # Maps host port 8080 to Nginx's port 80
+    volumes:
+      # Mounts the frontend code (HTML/CSS/JS) into the Nginx container
+      - ./frontend/public:/usr/share/nginx/html:ro
+      # Mounts our custom Nginx configuration
+      - ./nginx:/etc/nginx/conf.d:ro
+      # Mounts the shared volume containing Django's admin static files (read-only)
+      - static_volume:/var/www/static:ro
+    depends_on:
+      - backend
+
+  #################################################
+  # BACKEND - DJANGO API (UVICORN)
+  #################################################
+  backend:
+    build: ./backend
+    container_name: aigent_backend
+    command: >
+      sh -c "
+        echo 'Backend container starting...' &&
+        echo 'Waiting for PostgreSQL to be healthy...' &&
+        # relies on depends_on with condition: service_healthy
+
+        echo 'Applying database migrations...' &&
+        python manage.py migrate --noinput &&
+
+        echo 'Collecting static files for admin...' &&
+        python manage.py collectstatic --noinput --clear &&
+
+        echo 'Running initial data seeding...' &&
+        python manage.py seed_initial_data --overwrite &&
+
+        echo 'Starting Uvicorn server...' &&
+        uvicorn lba_project.asgi:application --host 0.0.0.0 --port 8000
+      "
+    volumes:
+      - ./backend:/app # Mounts the backend code for development
+      - static_volume:/app/staticfiles # Populates the shared static volume
+      # Mount log files to the host for easy access
+      - ./app.log:/app/app.log
+      - ./error.log:/app/error.log
+      - ./llm_interaction.log:/app/llm_interaction.log
+    # Ports are no longer exposed to the host; Nginx handles communication.
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # On Linux, add this to allow the container to reach the host (for Ollama)
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  #################################################
+  # CELERY WORKER & BEAT
+  #################################################
+  celery_worker:
+    build: ./backend
+    container_name: aigent_celery_worker
+    command: celery -A lba_project worker -l info -P gevent --concurrency=4
+    volumes:
+      - ./backend:/app
+      - ./app.log:/app/app.log
+      - ./error.log:/app/error.log
+      - ./llm_interaction.log:/app/llm_interaction.log
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_started # Waits for migrations to be run by the backend
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  celery_beat:
+    build: ./backend
+    container_name: aigent_celery_beat
+    command: celery -A lba_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  #################################################
+  # MONITORING & BACKING SERVICES
+  #################################################
+  flower:
+    image: mher/flower:2.0
+    container_name: aigent_flower
+    command: celery flower --broker=${CELERY_BROKER_URL} --basic_auth=${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+
   db:
     image: postgres:15-alpine
     container_name: aigent_postgres
@@ -50,103 +179,11 @@ services:
       retries: 5
       start_period: 10s
 
-  # --- MODIFIED backend SERVICE ---
-  backend:
-    build: ./backend
-    container_name: aigent_backend
-    command: >
-      sh -c "
-        echo 'Backend container starting...' &&
-        echo 'Waiting for PostgreSQL to be healthy...' &&
-        # The 'depends_on' with 'condition: service_healthy' for 'db'
-        # should ensure DB is ready, but an explicit wait can be added if needed.
-        # For example, using a wait-for-it.sh script.
-        # For now, relying on depends_on.
-
-        echo 'Applying database migrations...' &&
-        python manage.py migrate --noinput &&
-
-        echo 'Running initial data seeding...' &&
-        python manage.py seed_initial_data &&
-
-        echo 'Starting Django development server...' &&
-        python manage.py runserver 0.0.0.0:8000
-      "
-    volumes:
-      - ./backend:/app
-      - ./app.log:/app/app.log
-      - ./error.log:/app/error.log
-      - ./llm_interaction.log:/app/llm_interaction.log
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # For Linux hosts, to allow containers to reach Ollama on host.docker.internal:
-    # extra_hosts:
-    #  - "host.docker.internal:host-gateway"
-  # --- END OF MODIFIED backend SERVICE ---
-
-  celery_worker:
-    build: ./backend
-    container_name: aigent_celery_worker
-    command: celery -A lba_project worker -l info -P gevent --concurrency=4
-    volumes:
-      - ./backend:/app
-      - ./app.log:/app/app.log
-      - ./error.log:/app/error.log
-      - ./llm_interaction.log:/app/llm_interaction.log
-    env_file:
-      - .env
-    depends_on:
-      backend: # Ensures migrations run (from backend service) before worker starts
-        condition: service_started # Changed to service_started as migrations are now part of backend's command
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # extra_hosts:
-    #  - "host.docker.internal:host-gateway"
-
-  celery_beat:
-    build: ./backend
-    container_name: aigent_celery_beat
-    command: celery -A lba_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    volumes:
-      - ./backend:/app
-    env_file:
-      - .env
-    depends_on:
-      backend: # Ensures migrations run (from backend service) before beat starts
-        condition: service_started # Changed to service_started
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # extra_hosts:
-    #  - "host.docker.internal:host-gateway"
-
-  flower:
-    image: mher/flower:2.0
-    container_name: aigent_flower
-    command: celery flower --broker=${CELERY_BROKER_URL} --basic_auth=${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}
-    ports:
-      - "5555:5555"
-    env_file:
-      - .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      celery_worker:
-        condition: service_started
-
+#################################################
+# VOLUMES
+#################################################
 volumes:
   postgres_data:
   rabbitmq_data:
   redis_data:
+  static_volume: # Shared volume for Django admin static files
