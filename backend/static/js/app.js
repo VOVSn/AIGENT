@@ -1,5 +1,9 @@
-// Global state variables
-let currentAigentName = 'LBA Prime Assistant';
+// Global state object - no hardcoded names, just a safe structure.
+let currentAigent = {
+    id: null,
+    name: '',
+    presentationFormat: 'markdown' // A safe default before the API call finishes.
+};
 
 // --- THEME MANAGEMENT ---
 const THEMES = ['light', 'dark', 'memphis'];
@@ -103,9 +107,13 @@ async function populateAigentSelector() {
             const option = document.createElement('option');
             option.value = aigent.id;
             option.textContent = aigent.name;
+            option.dataset.presentationFormat = aigent.presentation_format;
             if (aigent.is_active) {
                 option.selected = true;
-                currentAigentName = aigent.name;
+                // Update the global state object with data from the API
+                currentAigent.id = aigent.id;
+                currentAigent.name = aigent.name;
+                currentAigent.presentationFormat = aigent.presentation_format;
             }
             selector.appendChild(option);
         });
@@ -117,21 +125,28 @@ async function populateAigentSelector() {
 async function handleAigentSwitch(event) {
     const selector = event.target;
     const newAigentId = selector.value;
-    const newAigent = selector.options[selector.selectedIndex].text;
+    const selectedOption = selector.options[selector.selectedIndex];
+    const newAigentName = selectedOption.text;
+    const newPresentationFormat = selectedOption.dataset.presentationFormat;
 
     try {
         await apiFetch('/api/v1/aigents/set_active/', {
             method: 'POST',
             body: JSON.stringify({ aigent_id: newAigentId })
         });
-        currentAigentName = newAigent;
+        // Update global state object completely on switch
+        currentAigent.id = newAigentId;
+        currentAigent.name = newAigentName;
+        currentAigent.presentationFormat = newPresentationFormat;
+
         const chatMessagesDiv = document.getElementById('chatMessages');
         if (chatMessagesDiv) chatMessagesDiv.innerHTML = '';
         await loadChatHistory();
-        appendMessageToChat('system', `Switched to ${currentAigentName}.`, new Date().toISOString(), true, 'info');
+        appendMessageToChat('system', `Switched to ${currentAigent.name}.`, new Date().toISOString(), true, 'info');
     } catch (error) {
         console.error("Failed to switch aigent:", error);
         appendMessageToChat('system', `Error switching aigent: ${error.message}`, new Date().toISOString(), true, 'error');
+        selector.value = currentAigent.id; // Revert selector if switch fails
     } finally {
         const settingsMenu = document.getElementById('settings-menu');
         if (settingsMenu) settingsMenu.classList.remove('active');
@@ -154,7 +169,6 @@ async function loadChatHistory() {
     }
 }
 
-// Enhanced iframe auto-sizing function with message box resizing
 function setupAutoResizingIframe(iframe, htmlContent) {
     // Set initial properties
     iframe.style.border = 'none';
@@ -182,193 +196,78 @@ function setupAutoResizingIframe(iframe, htmlContent) {
                         const body = iframeDoc.body;
                         const html = iframeDoc.documentElement;
                         
-                        // Remove any existing constraints temporarily
-                        const originalBodyStyle = {
-                            height: body.style.height,
-                            width: body.style.width,
-                            overflow: body.style.overflow
-                        };
-                        const originalHtmlStyle = {
-                            height: html.style.height,
-                            width: html.style.width,
-                            overflow: html.style.overflow
-                        };
+                        const originalBodyStyle = { height: body.style.height, width: body.style.width, overflow: body.style.overflow };
+                        const originalHtmlStyle = { height: html.style.height, width: html.style.width, overflow: html.style.overflow };
                         
-                        body.style.height = 'auto';
-                        body.style.width = 'auto';
-                        body.style.overflow = 'visible';
-                        html.style.height = 'auto';
-                        html.style.width = 'auto';
-                        html.style.overflow = 'visible';
+                        body.style.height = 'auto'; body.style.width = 'auto'; body.style.overflow = 'visible';
+                        html.style.height = 'auto'; html.style.width = 'auto'; html.style.overflow = 'visible';
                         
-                        // Force a reflow
-                        body.offsetHeight;
-                        body.offsetWidth;
+                        body.offsetHeight; body.offsetWidth;
                         
-                        // Get content dimensions
-                        const scrollHeight = Math.max(
-                            body.scrollHeight || 0,
-                            body.offsetHeight || 0,
-                            html.clientHeight || 0,
-                            html.scrollHeight || 0,
-                            html.offsetHeight || 0
-                        );
+                        const scrollHeight = Math.max(body.scrollHeight || 0, body.offsetHeight || 0, html.clientHeight || 0, html.scrollHeight || 0, html.offsetHeight || 0);
+                        const scrollWidth = Math.max(body.scrollWidth || 0, body.offsetWidth || 0, html.clientWidth || 0, html.scrollWidth || 0, html.offsetWidth || 0);
                         
-                        const scrollWidth = Math.max(
-                            body.scrollWidth || 0,
-                            body.offsetWidth || 0,
-                            html.clientWidth || 0,
-                            html.scrollWidth || 0,
-                            html.offsetWidth || 0
-                        );
+                        let boundingHeight = 0, boundingWidth = 0;
+                        try { const rect = body.getBoundingClientRect(); boundingHeight = rect.height; boundingWidth = rect.width; } catch (e) { }
                         
-                        // Get bounding box dimensions as additional check
-                        let boundingHeight = 0;
-                        let boundingWidth = 0;
-                        try {
-                            const rect = body.getBoundingClientRect();
-                            boundingHeight = rect.height;
-                            boundingWidth = rect.width;
-                        } catch (e) {
-                            boundingHeight = 0;
-                            boundingWidth = 0;
-                        }
-                        
-                        // Use the maximum of all measurements
                         const contentHeight = Math.max(scrollHeight, boundingHeight);
                         const contentWidth = Math.max(scrollWidth, boundingWidth);
                         
-                        // Set constraints
-                        const minHeight = 120;
-                        const maxHeight = window.innerHeight * 0.8;
-                        const minWidth = 300;
-                        const maxWidth = Math.min(window.innerWidth * 0.9, 1200);
+                        const minHeight = 120, maxHeight = window.innerHeight * 0.8;
+                        const minWidth = 300, maxWidth = Math.min(window.innerWidth * 0.9, 1200);
                         
                         const finalHeight = Math.min(Math.max(contentHeight + 10, minHeight), maxHeight);
                         const finalWidth = Math.min(Math.max(contentWidth + 10, minWidth), maxWidth);
                         
-                        // Only update if dimensions have changed significantly
                         const heightDifference = Math.abs(finalHeight - lastHeight);
                         const widthDifference = Math.abs(finalWidth - lastWidth);
                         
                         if (heightDifference > 5 || widthDifference > 5 || lastHeight === 0 || lastWidth === 0) {
-                            lastHeight = finalHeight;
-                            lastWidth = finalWidth;
-                            
-                            // Set iframe dimensions ONLY. Let CSS handle the containers.
+                            lastHeight = finalHeight; lastWidth = finalWidth;
                             iframeEl.style.height = finalHeight + 'px';
                             iframeEl.style.width = finalWidth + 'px';
                             
-                            console.log(`Iframe resized to: ${finalWidth}x${finalHeight}px (content: ${contentWidth}x${contentHeight}px)`);
-                            
-                            // Scroll chat to bottom after resize
                             const chatWindow = document.getElementById('chatWindow');
-                            if (chatWindow) {
-                                setTimeout(() => scrollToBottom(chatWindow), 100);
-                            }
+                            if (chatWindow) setTimeout(() => scrollToBottom(chatWindow), 100);
                         }
 
-                        // Restore original styles
-                        body.style.height = originalBodyStyle.height;
-                        body.style.width = originalBodyStyle.width;
-                        body.style.overflow = originalBodyStyle.overflow;
-                        html.style.height = originalHtmlStyle.height;
-                        html.style.width = originalHtmlStyle.width;
-                        html.style.overflow = originalHtmlStyle.overflow;
+                        body.style.height = originalBodyStyle.height; body.style.width = originalBodyStyle.width; body.style.overflow = originalBodyStyle.overflow;
+                        html.style.height = originalHtmlStyle.height; html.style.width = originalHtmlStyle.width; html.style.overflow = originalHtmlStyle.overflow;
                         
                     } catch (e) {
                         console.warn("Could not calculate iframe dimensions:", e);
-                        // Fallback dimensions
-                        if (lastHeight === 0 || lastWidth === 0) {
-                            iframeEl.style.height = '200px';
-                            iframeEl.style.width = '400px';
-                            lastHeight = 200;
-                            lastWidth = 400;
-                        }
-                    } finally {
-                        isResizing = false;
-                    }
+                        if (lastHeight === 0 || lastWidth === 0) { iframeEl.style.height = '200px'; iframeEl.style.width = '400px'; lastHeight = 200; lastWidth = 400; }
+                    } finally { isResizing = false; }
                 }, 150);
-            } else {
-                isResizing = false;
-            }
+            } else { isResizing = false; }
         } catch (e) {
             console.warn("Could not auto-resize iframe:", e);
-            // Fallback dimensions
-            if (lastHeight === 0 || lastWidth === 0) {
-                iframeEl.style.height = '200px';
-                iframeEl.style.width = '400px';
-                lastHeight = 200;
-                lastWidth = 400;
-            }
+            if (lastHeight === 0 || lastWidth === 0) { iframeEl.style.height = '200px'; iframeEl.style.width = '400px'; lastHeight = 200; lastWidth = 400; }
             isResizing = false;
         }
     };
 
-    // Debounced resize function
     let resizeTimeout;
-    const debouncedResize = (iframeEl) => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            if (resizeAttempts < maxResizeAttempts) {
-                resizeAttempts++;
-                resizeIframe(iframeEl);
-            }
-        }, 200);
-    };
+    const debouncedResize = (iframeEl) => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(() => { if (resizeAttempts < maxResizeAttempts) { resizeAttempts++; resizeIframe(iframeEl); } }, 200); };
 
-    // Handle iframe load event
     iframe.onload = function() {
         resizeAttempts = 0;
-        
-        // Initial resize with progressive delays
         setTimeout(() => resizeIframe(this), 100);
         setTimeout(() => resizeIframe(this), 300);
         setTimeout(() => resizeIframe(this), 600);
-        
-        // Set up observers for dynamic content
         try {
             const iframeDoc = this.contentDocument || this.contentWindow.document;
             if (iframeDoc && iframeDoc.body) {
-                // Mutation observer
-                const observer = new MutationObserver(() => {
-                    debouncedResize(this);
-                });
-                
-                observer.observe(iframeDoc.body, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: ['style', 'class', 'width', 'height']
-                });
-                
-                // Window resize observer
-                if (this.contentWindow) {
-                    let windowResizeTimeout;
-                    this.contentWindow.addEventListener('resize', () => {
-                        clearTimeout(windowResizeTimeout);
-                        windowResizeTimeout = setTimeout(() => {
-                            debouncedResize(this);
-                        }, 300);
-                    });
-                }
+                const observer = new MutationObserver(() => debouncedResize(this));
+                observer.observe(iframeDoc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'width', 'height'] });
+                if (this.contentWindow) { let windowResizeTimeout; this.contentWindow.addEventListener('resize', () => { clearTimeout(windowResizeTimeout); windowResizeTimeout = setTimeout(() => debouncedResize(this), 300); }); }
             }
-        } catch (e) {
-            console.warn("Could not set up iframe observers:", e);
-        }
+        } catch (e) { console.warn("Could not set up iframe observers:", e); }
     };
-
-    // Handle errors
-    iframe.onerror = function() {
-        console.error("Iframe failed to load");
-        this.style.height = '200px';
-        this.style.width = '400px';
-        lastHeight = 200;
-        lastWidth = 400;
-    };
+    iframe.onerror = function() { this.style.height = '200px'; this.style.width = '400px'; lastHeight = 200; lastWidth = 400; };
 }
 
-// Updated message appending function with HTML content class
+// FULLY REFACTORED: This function relies ONLY on currentAigent.presentationFormat
 function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'normal') {
     const chatWindow = document.getElementById('chatWindow');
     const chatMessagesDiv = document.getElementById('chatMessages');
@@ -376,139 +275,56 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
 
     let normalizedRole = role.toLowerCase();
     const messageWrapper = document.createElement('div');
-    messageWrapper.classList.add('message', normalizedRole);
+    messageWrapper.classList.add('message');
 
-    if (normalizedRole === 'aigent' || normalizedRole === 'assistant') { 
-        normalizedRole = 'aigent'; 
-        messageWrapper.classList.add('aigent'); 
-    } else if (normalizedRole === 'user') { 
-        messageWrapper.classList.add('user'); 
-    } else { 
-        messageWrapper.classList.add('system'); 
-    }
+    if (normalizedRole === 'aigent' || normalizedRole === 'assistant') { normalizedRole = 'aigent'; messageWrapper.classList.add('aigent'); } 
+    else if (normalizedRole === 'user') { messageWrapper.classList.add('user'); } 
+    else { messageWrapper.classList.add('system'); }
 
     if (type === 'error') messageWrapper.classList.add('error');
     if (type === 'info') messageWrapper.classList.add('info');
 
-    if (normalizedRole === 'aigent' && currentAigentName === 'HTMLlo') {
-        // Add HTML content class for special styling
-        messageWrapper.classList.add('html-content');
-        
-        const htmlRegex = /<html.*?>([\s\S]*)<\/html>/i;
-        let htmlContent;
-        
-        if (text.match(htmlRegex)) {
-            htmlContent = text;
-        } else {
-            // Wrap non-HTML content with proper structure and auto-sizing styles
-            htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            margin: 0;
-            padding: 15px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #fff;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            width: auto;
-            height: auto;
-            min-width: 250px;
-            box-sizing: border-box;
-        }
-        * {
-            box-sizing: border-box;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-        }
-        pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-width: 100%;
-        }
-        html, body {
-            overflow-x: hidden;
-            overflow-y: hidden;
-        }
-        /* Ensure content doesn't create unnecessary scrolling */
-        html {
-            height: auto !important;
-            width: auto !important;
-        }
-    </style>
-</head>
-<body>${text}</body>
-</html>`;
-        }
+    if (normalizedRole === 'aigent') {
+        // The rendering logic is now data-driven, not name-driven.
+        switch (currentAigent.presentationFormat) {
+            case 'html':
+                messageWrapper.classList.add('html-content');
+                const htmlRegex = /<html.*?>([\s\S]*)<\/html>/i;
+                let htmlContent = text.match(htmlRegex) ? text : `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body { margin: 0; padding: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background: #fff; word-wrap: break-word; overflow-wrap: break-word; width: auto; height: auto; min-width: 250px; box-sizing: border-box; } * { box-sizing: border-box; } img { max-width: 100%; height: auto; } pre { white-space: pre-wrap; word-wrap: break-word; max-width: 100%; } html, body { overflow-x: hidden; overflow-y: hidden; } html { height: auto !important; width: auto !important; }</style></head><body>${text}</body></html>`;
 
-        const widgetContainer = document.createElement('div');
-        widgetContainer.className = 'html-widget-container';
+                const widgetContainer = document.createElement('div');
+                widgetContainer.className = 'html-widget-container';
+                const copyBtn = document.createElement('button'); copyBtn.className = 'widget-copy-btn'; copyBtn.title = 'Copy HTML Source'; copyBtn.innerHTML = '📋';
+                copyBtn.onclick = () => { navigator.clipboard.writeText(htmlContent).then(() => { copyBtn.innerHTML = '✅'; setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000); }).catch(err => { copyBtn.innerHTML = '❌'; setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000); }); };
+                const refreshBtn = document.createElement('button'); refreshBtn.className = 'widget-refresh-btn'; refreshBtn.title = 'Refresh Widget'; refreshBtn.innerHTML = '↻';
+                const stopBtn = document.createElement('button'); stopBtn.className = 'widget-stop-btn'; stopBtn.title = 'Stop Widget Execution'; stopBtn.innerHTML = '■';
+                const iframe = document.createElement('iframe'); iframe.setAttribute('frameborder', '0'); iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+                
+                stopBtn.onclick = () => { iframe.src = 'about:blank'; };
+                refreshBtn.onclick = () => { if (copyBtn.innerHTML !== '📋') { copyBtn.innerHTML = '📋'; } iframe.srcdoc = htmlContent; };
+                
+                setupAutoResizingIframe(iframe, htmlContent);
+                widgetContainer.append(copyBtn, refreshBtn, stopBtn, iframe);
+                messageWrapper.appendChild(widgetContainer);
+                break;
 
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'widget-copy-btn';
-        copyBtn.title = 'Copy HTML Source';
-        copyBtn.innerHTML = '📋';
-        copyBtn.onclick = () => {
-            navigator.clipboard.writeText(htmlContent).then(() => {
-                copyBtn.innerHTML = '✅';
-                setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy HTML: ', err);
-                copyBtn.innerHTML = '❌';
-                setTimeout(() => { copyBtn.innerHTML = '📋'; }, 2000);
-            });
-        };
+            case 'markdown':
+                const markdownContentDiv = document.createElement('div');
+                markdownContentDiv.className = 'markdown-content';
+                markdownContentDiv.innerHTML = DOMPurify.sanitize(marked.parse(text));
+                markdownContentDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
+                messageWrapper.appendChild(markdownContentDiv);
+                break;
 
-        const refreshBtn = document.createElement('button');
-        refreshBtn.className = 'widget-refresh-btn';
-        refreshBtn.title = 'Refresh Widget';
-        refreshBtn.innerHTML = '↻';
-        
-        const stopBtn = document.createElement('button');
-        stopBtn.className = 'widget-stop-btn';
-        stopBtn.title = 'Stop Widget Execution';
-        stopBtn.innerHTML = '■';
-        stopBtn.onclick = () => {
-            iframe.src = 'about:blank';
-        };
-
-        const iframe = document.createElement('iframe');
-        iframe.setAttribute('frameborder', '0');
-        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
-        
-        // Set up auto-resizing with the enhanced function
-        setupAutoResizingIframe(iframe, htmlContent);
-
-        // FIX: Change the refresh button's behavior to prevent container growth.
-        // It now just reloads the iframe content, letting the original 'onload' handler manage resizing.
-        refreshBtn.onclick = () => { 
-            if (copyBtn.innerHTML !== '📋') {
-                copyBtn.innerHTML = '📋';
-            }
-            iframe.srcdoc = htmlContent;
-        };
-
-        widgetContainer.appendChild(copyBtn);
-        widgetContainer.appendChild(refreshBtn);
-        widgetContainer.appendChild(stopBtn);
-        widgetContainer.appendChild(iframe);
-        messageWrapper.appendChild(widgetContainer);
-
-    } else if (normalizedRole === 'aigent') {
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'markdown-content';
-        contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(text));
-        contentDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
-        messageWrapper.appendChild(contentDiv);
-    } else {
+            case 'raw':
+            default:
+                const rawContentDiv = document.createElement('div');
+                rawContentDiv.className = 'markdown-content';
+                rawContentDiv.textContent = text;
+                messageWrapper.appendChild(rawContentDiv);
+                break;
+        }
+    } else { // Handles 'user' and 'system' messages
         const contentDiv = document.createElement('div');
         contentDiv.className = 'markdown-content';
         contentDiv.textContent = text;
@@ -517,7 +333,6 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     
     chatMessagesDiv.appendChild(messageWrapper);
     if (doScroll) {
-        // Delay scroll to ensure iframe has time to resize
         setTimeout(() => scrollToBottom(chatWindow), 800);
     }
 }
@@ -583,31 +398,14 @@ async function handleChangePassword(event) {
     const newPassword1 = newPassword1El.value;
     const newPassword2 = newPassword2El.value;
     if (!statusElement) return;
-    statusElement.style.display = 'none';
-    statusElement.textContent = '';
-    statusElement.className = 'status-message';
-    if (newPassword1 !== newPassword2) {
-        statusElement.textContent = "New passwords do not match.";
-        statusElement.classList.add('error-message');
-        statusElement.style.display = 'block';
-        return;
-    }
-    if (!newPassword1) {
-        statusElement.textContent = "New password cannot be empty.";
-        statusElement.classList.add('error-message');
-        statusElement.style.display = 'block';
-        return;
-    }
+    statusElement.style.display = 'none'; statusElement.textContent = ''; statusElement.className = 'status-message';
+    if (newPassword1 !== newPassword2) { statusElement.textContent = "New passwords do not match."; statusElement.classList.add('error-message'); statusElement.style.display = 'block'; return; }
+    if (!newPassword1) { statusElement.textContent = "New password cannot be empty."; statusElement.classList.add('error-message'); statusElement.style.display = 'block'; return; }
     try {
-        await apiFetch('/api/v1/auth/password/change/', {
-            method: 'POST',
-            body: JSON.stringify({ old_password: oldPassword, new_password1: newPassword1, new_password2: newPassword2 })
-        });
+        await apiFetch('/api/v1/auth/password/change/', { method: 'POST', body: JSON.stringify({ old_password: oldPassword, new_password1: newPassword1, new_password2: newPassword2 }) });
         statusElement.textContent = "Password changed successfully!";
         statusElement.classList.add('success-message');
-        if(oldPasswordEl) oldPasswordEl.value = '';
-        if(newPassword1El) newPassword1El.value = '';
-        if(newPassword2El) newPassword2El.value = '';
+        if(oldPasswordEl) oldPasswordEl.value = ''; if(newPassword1El) newPassword1El.value = ''; if(newPassword2El) newPassword2El.value = '';
     } catch (error) {
         statusElement.textContent = `Error: ${error.message || 'Failed to change password.'}`;
         statusElement.classList.add('error-message');
@@ -637,34 +435,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const settingsMenuBtn = document.getElementById('settings-menu-btn');
     const settingsMenu = document.getElementById('settings-menu');
     if (settingsMenuBtn && settingsMenu) {
-        settingsMenuBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            settingsMenu.classList.toggle('active');
-        });
+        settingsMenuBtn.addEventListener('click', (event) => { event.stopPropagation(); settingsMenu.classList.toggle('active'); });
     }
-    document.querySelectorAll('.theme-choice-btn').forEach(button => {
-        button.addEventListener('click', () => applyTheme(button.dataset.themeSet));
-    });
+    document.querySelectorAll('.theme-choice-btn').forEach(button => { button.addEventListener('click', () => applyTheme(button.dataset.themeSet)); });
     const aigentSelector = document.getElementById('aigent-selector');
     if (aigentSelector) aigentSelector.addEventListener('change', handleAigentSwitch);
-    window.addEventListener('click', (event) => {
-        if (settingsMenu && settingsMenu.classList.contains('active')) {
-            if (!settingsMenu.contains(event.target) && !settingsMenuBtn.contains(event.target)) {
-                settingsMenu.classList.remove('active');
-            }
-        }
-    });
+    window.addEventListener('click', (event) => { if (settingsMenu && settingsMenu.classList.contains('active')) { if (!settingsMenu.contains(event.target) && !settingsMenuBtn.contains(event.target)) { settingsMenu.classList.remove('active'); } } });
 
     const accessToken = localStorage.getItem('accessToken');
     const currentPagePath = window.location.pathname;
     if (currentPagePath.includes('/chat/') || currentPagePath.includes('/password-change/')) {
         if (!accessToken) window.location.href = '/login/';
-        else {
-            setupPage();
-            if (currentPagePath.includes('/password-change/')) {
-                document.getElementById('passwordChangeForm')?.addEventListener('submit', handleChangePassword);
-            }
-        }
+        else { setupPage(); if (currentPagePath.includes('/password-change/')) { document.getElementById('passwordChangeForm')?.addEventListener('submit', handleChangePassword); } }
     } else if (currentPagePath.includes('/login/')) {
         if (accessToken) window.location.href = '/chat/';
     }

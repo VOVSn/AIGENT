@@ -1,11 +1,11 @@
 from rest_framework import serializers
 from .models import Aigent, ChatHistory
 
-# NEW: Serializer for listing available Aigents in the UI
+# UPDATED: Serializer for listing available Aigents in the UI
 class AigentListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Aigent
-        fields = ['id', 'name', 'is_active']
+        fields = ['id', 'name', 'is_active', 'presentation_format']
 
 # NEW: Serializer for the request to set the active Aigent
 class SetActiveAigentSerializer(serializers.Serializer):

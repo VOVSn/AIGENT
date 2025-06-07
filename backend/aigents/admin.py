@@ -8,8 +8,9 @@ class PromptAdmin(admin.ModelAdmin):
 
 @admin.register(Aigent)
 class AigentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'is_active', 'ollama_model_name', 'default_prompt_template', 'created_at')
-    list_filter = ('is_active', 'ollama_model_name')
+    # UPDATED list_display and list_filter
+    list_display = ('name', 'is_active', 'presentation_format', 'ollama_model_name', 'default_prompt_template', 'created_at')
+    list_filter = ('is_active', 'presentation_format', 'ollama_model_name')
     search_fields = ('name', 'system_persona_prompt')
     # For JSONFields like ollama_endpoints and aigent_state,
     # direct editing in admin can be clunky. Consider custom widgets or readonly display

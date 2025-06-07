@@ -43,9 +43,25 @@ class Prompt(models.Model):
         return self.name
 
 class Aigent(models.Model):
+    # ADDED: Choices for the new field
+    PRESENTATION_FORMAT_CHOICES = [
+        ('markdown', 'Markdown'),
+        ('html', 'HTML'),
+        ('raw', 'Raw Text'),
+    ]
+
     # ... (other fields are unchanged)
     name = models.CharField(max_length=255, unique=True, help_text="A unique name for this Aigent (e.g., 'LBA Support Aigent').")
     is_active = models.BooleanField(default=False, help_text="Designates whether this Aigent is the currently active one for general user interaction. Only one should be active at a time.")
+    
+    # ADDED: The new presentation_format field
+    presentation_format = models.CharField(
+        max_length=10,
+        choices=PRESENTATION_FORMAT_CHOICES,
+        default='markdown',
+        help_text="The format for presenting the Aigent's responses in the UI (e.g., Markdown, HTML)."
+    )
+    
     system_persona_prompt = models.TextField(help_text="Brief description of the Aigent's role, personality, goals. This is a *part* of the full prompt.", blank=True)
     ollama_model_name = models.CharField(max_length=100, help_text="The Ollama model name to use (e.g., 'llama3:latest').")
     ollama_endpoints = models.JSONField(default=list, help_text="A list of Ollama API base URLs for this Aigent (e.g., ['http://10.0.0.2:11434']).")
