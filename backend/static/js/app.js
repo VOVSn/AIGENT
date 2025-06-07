@@ -2,39 +2,30 @@
 const THEMES = ['light', 'dark', 'memphis'];
 
 function applyTheme(theme) {
+    if (!THEMES.includes(theme)) return;
+
+    // 1. Set theme on root element
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
 
+    // 2. Switch highlight.js stylesheet
     const lightThemeLink = document.getElementById('hljs-light-theme');
     const darkThemeLink = document.getElementById('hljs-dark-theme');
-
-    if (!lightThemeLink || !darkThemeLink) return;
-
-    if (theme === 'dark') {
-        lightThemeLink.disabled = true;
-        darkThemeLink.disabled = false;
-    } else { // 'light' and 'memphis' both use the light code theme
-        lightThemeLink.disabled = false;
-        darkThemeLink.disabled = true;
+    if (lightThemeLink && darkThemeLink) {
+        lightThemeLink.disabled = (theme === 'dark');
+        darkThemeLink.disabled = (theme !== 'dark');
     }
-}
 
-function cycleTheme() {
-    const currentTheme = localStorage.getItem('theme') || 'light';
-    const currentIndex = THEMES.indexOf(currentTheme);
-    const nextIndex = (currentIndex + 1) % THEMES.length;
-    const nextTheme = THEMES[nextIndex];
-    applyTheme(nextTheme);
+    // 3. Update active class on theme choice buttons
+    document.querySelectorAll('.theme-choice-btn').forEach(btn => {
+        btn.classList.toggle('active-theme', btn.dataset.themeSet === theme);
+    });
 }
 
 // Immediately invoked function to apply theme on script load
 (function() {
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme && THEMES.includes(savedTheme)) {
-        applyTheme(savedTheme);
-    } else {
-        applyTheme(THEMES[0]);
-    }
+    applyTheme(savedTheme || THEMES[0]);
 })();
 
 
@@ -69,10 +60,12 @@ async function apiFetch(url, options = {}) {
             }
         }
         if (!response.ok) {
+            // For 204 No Content, response.json() will fail, so handle it before
+            if (response.status === 204) return null;
             const errorData = await response.json().catch(() => ({ detail: `Request failed with status ${response.status}` }));
             throw new Error(errorData.detail || `API request failed: ${response.statusText} (${response.status})`);
         }
-        if (response.status === 204) return null;
+        if (response.status === 204) return null; // Handle No Content responses successfully
         return await response.json();
     } catch (error) {
         console.error('API Fetch General Error:', error.message);
@@ -135,7 +128,7 @@ async function loadChatHistory() {
     chatMessagesDiv.innerHTML = ''; 
     try {
         const data = await apiFetch('/api/v1/chat/history/');
-        if (data.history && Array.isArray(data.history)) {
+        if (data && data.history && Array.isArray(data.history)) {
             data.history.forEach(msg => {
                 appendMessageToChat(msg.role, msg.content, msg.timestamp, false);
             });
@@ -150,11 +143,9 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     const chatWindow = document.getElementById('chatWindow');
     const chatMessagesDiv = document.getElementById('chatMessages');
     if (!chatMessagesDiv || !chatWindow) return;
-
     let normalizedRole = role.toLowerCase();
     const messageWrapper = document.createElement('div');
     messageWrapper.classList.add('message', normalizedRole);
-
     if (normalizedRole === 'aigent' || normalizedRole === 'assistant') {
         normalizedRole = 'aigent';
         messageWrapper.classList.add('aigent');
@@ -163,24 +154,18 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     } else {
         messageWrapper.classList.add('system');
     }
-
     if (type === 'error') messageWrapper.classList.add('error');
     if (type === 'info') messageWrapper.classList.add('info');
-
     const contentDiv = document.createElement('div');
-    
     if (normalizedRole === 'aigent') {
         const dirtyHtml = marked.parse(text);
         contentDiv.innerHTML = DOMPurify.sanitize(dirtyHtml);
-        
         contentDiv.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightElement(block);
         });
-
     } else {
         contentDiv.textContent = text;
     }
-    
     messageWrapper.appendChild(contentDiv);
     chatMessagesDiv.appendChild(messageWrapper);
     if (doScroll) {
@@ -293,12 +278,72 @@ async function handleChangePassword(event) {
 
 // --- DOMContentLoaded Event Listener ---
 document.addEventListener('DOMContentLoaded', function() {
-    const themeToggleBtn = document.getElementById('themeToggleBtn');
-    if (themeToggleBtn) themeToggleBtn.addEventListener('click', cycleTheme);
-    const logoutButton = document.getElementById('logoutButton') || document.getElementById('logoutButtonGlobal');
+    // --- Global Event Listeners Setup ---
+    const logoutButton = document.getElementById('logoutButton');
     if (logoutButton) logoutButton.addEventListener('click', logout);
+
+    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to permanently delete your chat history? This action cannot be undone.')) {
+                return;
+            }
+            try {
+                await apiFetch('/api/v1/chat/history/', { method: 'DELETE' });
+                const chatMessagesDiv = document.getElementById('chatMessages');
+                if (chatMessagesDiv) {
+                    chatMessagesDiv.innerHTML = '';
+                }
+                appendMessageToChat('system', 'Chat history has been cleared.', new Date().toISOString(), true, 'info');
+                document.getElementById('settings-menu').classList.remove('active');
+            } catch (error) {
+                console.error("Failed to clear history:", error);
+                appendMessageToChat('system', `Error clearing history: ${error.message}`, new Date().toISOString(), true, 'error');
+            }
+        });
+    }
+
+    // Login page's standalone theme button
+    const loginThemeBtn = document.querySelector('.container > .theme-toggle-button');
+    if(loginThemeBtn) {
+        const cycle = () => {
+             const currentTheme = localStorage.getItem('theme') || 'light';
+             const currentIndex = THEMES.indexOf(currentTheme);
+             const nextIndex = (currentIndex + 1) % THEMES.length;
+             applyTheme(THEMES[nextIndex]);
+        };
+        loginThemeBtn.addEventListener('click', cycle);
+    }
+    
+    // --- Settings Menu Logic ---
+    const settingsMenuBtn = document.getElementById('settings-menu-btn');
+    const settingsMenu = document.getElementById('settings-menu');
+
+    if (settingsMenuBtn && settingsMenu) {
+        settingsMenuBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            settingsMenu.classList.toggle('active');
+        });
+
+        settingsMenu.querySelectorAll('.theme-choice-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                applyTheme(button.dataset.themeSet);
+            });
+        });
+    }
+
+    window.addEventListener('click', (event) => {
+        if (settingsMenu && settingsMenu.classList.contains('active')) {
+            if (!settingsMenu.contains(event.target) && !settingsMenuBtn.contains(event.target)) {
+                settingsMenu.classList.remove('active');
+            }
+        }
+    });
+
+    // --- Page Specific Setup ---
     const accessToken = localStorage.getItem('accessToken');
     const currentPagePath = window.location.pathname;
+
     if (currentPagePath.includes('/chat/')) {
         if (!accessToken) window.location.href = '/login/';
         else setupChatPage();
