@@ -154,6 +154,175 @@ async function loadChatHistory() {
     }
 }
 
+// Enhanced iframe auto-sizing function - FIXED VERSION
+function setupAutoResizingIframe(iframe, htmlContent) {
+    // Set initial properties
+    iframe.style.width = '100%';
+    iframe.style.border = 'none';
+    iframe.style.display = 'block';
+    iframe.setAttribute('scrolling', 'no');
+    iframe.srcdoc = htmlContent;
+
+    let isResizing = false;
+    let lastHeight = 0;
+    let resizeAttempts = 0;
+    const maxResizeAttempts = 3;
+
+    const resizeIframe = (iframeEl) => {
+        // Prevent multiple simultaneous resize operations
+        if (isResizing) return;
+        isResizing = true;
+
+        try {
+            const iframeDoc = iframeEl.contentDocument || iframeEl.contentWindow.document;
+            if (iframeDoc && iframeDoc.body) {
+                // Wait for content to fully render
+                setTimeout(() => {
+                    try {
+                        const body = iframeDoc.body;
+                        const html = iframeDoc.documentElement;
+                        
+                        // Remove any existing height constraints temporarily
+                        const originalBodyStyle = body.style.height;
+                        const originalHtmlStyle = html.style.height;
+                        
+                        body.style.height = 'auto';
+                        html.style.height = 'auto';
+                        
+                        // Force a reflow
+                        body.offsetHeight;
+                        
+                        // Get content dimensions using multiple methods
+                        const scrollHeight = Math.max(
+                            body.scrollHeight || 0,
+                            body.offsetHeight || 0,
+                            html.clientHeight || 0,
+                            html.scrollHeight || 0,
+                            html.offsetHeight || 0
+                        );
+                        
+                        // Get bounding box height as additional check
+                        let boundingHeight = 0;
+                        try {
+                            boundingHeight = body.getBoundingClientRect().height;
+                        } catch (e) {
+                            boundingHeight = 0;
+                        }
+                        
+                        // Use the maximum of all measurements
+                        const contentHeight = Math.max(scrollHeight, boundingHeight);
+                        
+                        // Add some padding and set minimum/maximum constraints
+                        const minHeight = 150;
+                        const maxHeight = window.innerHeight * 0.8; // Max 80% of viewport height
+                        const finalHeight = Math.min(Math.max(contentHeight + 20, minHeight), maxHeight);
+                        
+                        // Only update if height has changed significantly (prevent micro-adjustments)
+                        const heightDifference = Math.abs(finalHeight - lastHeight);
+                        if (heightDifference > 5 || lastHeight === 0) {
+                            lastHeight = finalHeight;
+                            iframeEl.style.height = finalHeight + 'px';
+                            
+                            console.log(`Iframe resized to: ${finalHeight}px (content: ${contentHeight}px, scroll: ${scrollHeight}px, bounding: ${boundingHeight}px)`);
+                            
+                            // Scroll chat to bottom after resize
+                            const chatWindow = document.getElementById('chatWindow');
+                            if (chatWindow) {
+                                setTimeout(() => scrollToBottom(chatWindow), 100);
+                            }
+                        }
+
+                        // Restore original styles
+                        body.style.height = originalBodyStyle;
+                        html.style.height = originalHtmlStyle;
+                        
+                    } catch (e) {
+                        console.warn("Could not calculate iframe dimensions:", e);
+                        // Fallback height
+                        if (lastHeight === 0) {
+                            iframeEl.style.height = '300px';
+                            lastHeight = 300;
+                        }
+                    } finally {
+                        isResizing = false;
+                    }
+                }, 100);
+            } else {
+                isResizing = false;
+            }
+        } catch (e) {
+            console.warn("Could not auto-resize iframe:", e);
+            // Fallback height
+            if (lastHeight === 0) {
+                iframeEl.style.height = '300px';
+                lastHeight = 300;
+            }
+            isResizing = false;
+        }
+    };
+
+    // Debounced resize function to prevent excessive calls
+    let resizeTimeout;
+    const debouncedResize = (iframeEl) => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (resizeAttempts < maxResizeAttempts) {
+                resizeAttempts++;
+                resizeIframe(iframeEl);
+            }
+        }, 200);
+    };
+
+    // Handle iframe load event
+    iframe.onload = function() {
+        resizeAttempts = 0;
+        
+        // Initial resize with progressive delays
+        setTimeout(() => resizeIframe(this), 100);
+        setTimeout(() => resizeIframe(this), 300);
+        setTimeout(() => resizeIframe(this), 600);
+        
+        // Set up mutation observer for dynamic content changes (with debouncing)
+        try {
+            const iframeDoc = this.contentDocument || this.contentWindow.document;
+            if (iframeDoc && iframeDoc.body) {
+                // Create mutation observer with debouncing
+                const observer = new MutationObserver(() => {
+                    debouncedResize(this);
+                });
+                
+                observer.observe(iframeDoc.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['style', 'class', 'width', 'height']
+                });
+                
+                // Also observe window resize events within the iframe (debounced)
+                if (this.contentWindow) {
+                    let windowResizeTimeout;
+                    this.contentWindow.addEventListener('resize', () => {
+                        clearTimeout(windowResizeTimeout);
+                        windowResizeTimeout = setTimeout(() => {
+                            debouncedResize(this);
+                        }, 300);
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("Could not set up iframe observers:", e);
+        }
+    };
+
+    // Handle errors
+    iframe.onerror = function() {
+        console.error("Iframe failed to load");
+        this.style.height = '300px';
+        lastHeight = 300;
+    };
+}
+
+// Updated message appending function with improved HTML handling
 function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'normal') {
     const chatWindow = document.getElementById('chatWindow');
     const chatMessagesDiv = document.getElementById('chatMessages');
@@ -163,16 +332,66 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     const messageWrapper = document.createElement('div');
     messageWrapper.classList.add('message', normalizedRole);
 
-    if (normalizedRole === 'aigent' || normalizedRole === 'assistant') { normalizedRole = 'aigent'; messageWrapper.classList.add('aigent'); } 
-    else if (normalizedRole === 'user') { messageWrapper.classList.add('user'); } 
-    else { messageWrapper.classList.add('system'); }
+    if (normalizedRole === 'aigent' || normalizedRole === 'assistant') { 
+        normalizedRole = 'aigent'; 
+        messageWrapper.classList.add('aigent'); 
+    } else if (normalizedRole === 'user') { 
+        messageWrapper.classList.add('user'); 
+    } else { 
+        messageWrapper.classList.add('system'); 
+    }
 
     if (type === 'error') messageWrapper.classList.add('error');
     if (type === 'info') messageWrapper.classList.add('info');
 
     if (normalizedRole === 'aigent' && currentAigentName === 'HTMLlo') {
         const htmlRegex = /<html.*?>([\s\S]*)<\/html>/i;
-        let htmlContent = text.match(htmlRegex) ? text : `<html><head><style>body{margin:0;font-family:sans-serif;}</style></head><body>${text}</body></html>`;
+        let htmlContent;
+        
+        if (text.match(htmlRegex)) {
+            htmlContent = text;
+        } else {
+            // Wrap non-HTML content in a proper HTML structure with better styling
+            htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            min-height: auto;
+            height: auto;
+        }
+        * {
+            box-sizing: border-box;
+            max-width: 100%;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+        html, body {
+            overflow-x: hidden;
+        }
+    </style>
+</head>
+<body>${text}</body>
+</html>`;
+        }
 
         const widgetContainer = document.createElement('div');
         widgetContainer.className = 'html-widget-container';
@@ -180,22 +399,17 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
         const refreshBtn = document.createElement('button');
         refreshBtn.className = 'widget-refresh-btn';
         refreshBtn.title = 'Refresh Widget';
-        refreshBtn.innerHTML = '↻'; // Unicode for clockwise arrow
+        refreshBtn.innerHTML = '↻';
         
         const iframe = document.createElement('iframe');
         iframe.setAttribute('frameborder', '0');
-        iframe.setAttribute('sandbox', 'allow-scripts');
-        iframe.setAttribute('width', '100%');
-        iframe.srcdoc = htmlContent;
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+        
+        // Set up auto-resizing with the fixed function
+        setupAutoResizingIframe(iframe, htmlContent);
 
-        refreshBtn.onclick = () => { iframe.srcdoc = htmlContent; };
-
-        iframe.onload = function() {
-            try {
-                iframe.style.height = iframe.contentWindow.document.body.scrollHeight + 'px';
-            } catch (e) {
-                console.warn("Could not auto-resize iframe.", e);
-            }
+        refreshBtn.onclick = () => { 
+            setupAutoResizingIframe(iframe, htmlContent);
         };
 
         widgetContainer.appendChild(refreshBtn);
@@ -216,7 +430,10 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     }
     
     chatMessagesDiv.appendChild(messageWrapper);
-    if (doScroll) scrollToBottom(chatWindow);
+    if (doScroll) {
+        // Delay scroll to ensure iframe has time to resize
+        setTimeout(() => scrollToBottom(chatWindow), 500);
+    }
 }
 
 async function sendMessageToAigent(messageText) {

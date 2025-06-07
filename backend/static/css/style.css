@@ -128,11 +128,11 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
 #chatMessages { flex-grow: 1; display: flex; flex-direction: column; }
 .message { padding: 10px 15px; border-radius: 18px; margin-bottom: 10px; max-width: 85%; width: fit-content; word-wrap: break-word; line-height: 1.4; font-size: 0.95em; transition: background-color 0.3s, color 0.3s; }
 .message.user { background-color: var(--user-message-bg); color: var(--user-message-text); align-self: flex-end; margin-left: auto; border-bottom-right-radius: 5px; }
-.message.aigent { background-color: var(--aigent-message-bg); color: var(--aigent-message-text); align-self: flex-start; margin-right: auto; border-bottom-left-radius: 5px; padding: 0; /* Remove padding for container */ }
+.message.aigent { background-color: var(--aigent-message-bg); color: var(--aigent-message-text); align-self: flex-start; margin-right: auto; border-bottom-left-radius: 5px; padding: 0; max-width: 100%; min-width: 300px; width: 100%; }
 .message.system { background-color: var(--info-bg); color: var(--info-text); align-self: center; text-align: center; font-style: italic; font-size: 0.85em; max-width: 90%; width: fit-content; padding: 6px 10px; border: 1px solid var(--info-border); }
 
 /* --- Markdown & HTML Content Styles --- */
-.message.aigent .markdown-content { padding: 10px 15px; } /* Add padding back for non-HTML aigents */
+.message.aigent .markdown-content { padding: 10px 15px; }
 .message.aigent p { margin-bottom: 1em; }
 .message.aigent p:last-child { margin-bottom: 0; }
 .message.aigent a { color: var(--accent-primary); text-decoration: underline; }
@@ -143,8 +143,17 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
 .message.aigent code:not(pre > code) { font-family: 'Courier New', Courier, monospace; background-color: var(--code-bg); padding: 2px 4px; border-radius: 4px; font-size: 0.9em; color: var(--text-primary); }
 .message.aigent blockquote { border-left: 3px solid var(--accent-primary); padding-left: 15px; margin-left: 5px; color: var(--text-secondary); font-style: italic; }
 
-/* NEW: Styles for the HTML widget container and iframe */
-.html-widget-container { position: relative; padding-top: 28px; /* Space for the refresh button */ }
+/* --- Enhanced HTML Widget Container and Iframe Styles --- */
+.html-widget-container { 
+    position: relative; 
+    padding-top: 28px;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    border-radius: 6px;
+    background: transparent;
+}
+
 .widget-refresh-btn {
     position: absolute;
     top: 4px;
@@ -159,17 +168,105 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
     font-size: 14px;
     line-height: 20px;
     text-align: center;
-    z-index: 2;
+    z-index: 10;
     transition: transform 0.2s, background-color 0.2s;
 }
-.widget-refresh-btn:hover { background: rgba(0,0,0,0.6); transform: rotate(90deg); }
+
+.widget-refresh-btn:hover { 
+    background: rgba(0,0,0,0.6); 
+    transform: rotate(90deg); 
+}
+
 .message.aigent iframe {
     display: block;
     border: none;
     width: 100%;
-    min-height: 250px; /* NEW: Set a larger minimum height */
-    resize: vertical; /* NEW: Allow user to resize vertically */
-    overflow: auto;
+    min-height: 200px;
+    max-width: 100%;
+    background-color: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: height 0.3s ease-in-out;
+    overflow: hidden;
+}
+
+/* Dark theme adjustments for iframes */
+html[data-theme="dark"] .message.aigent iframe {
+    background-color: var(--bg-secondary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+html[data-theme="dark"] .widget-refresh-btn {
+    background: rgba(255,255,255,0.2);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .widget-refresh-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Memphis theme adjustments for iframes */
+html[data-theme="memphis"] .message.aigent iframe {
+    border: 2px solid var(--border-color);
+    box-shadow: 3px 3px 0px var(--shadow-color);
+}
+
+html[data-theme="memphis"] .widget-refresh-btn {
+    background: var(--accent-primary);
+    color: white;
+    border: 2px solid var(--border-color);
+}
+
+html[data-theme="memphis"] .widget-refresh-btn:hover {
+    background: var(--accent-hover);
+    transform: rotate(90deg) scale(1.1);
+}
+
+html[data-theme="memphis"] .html-widget-container {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+    .message.aigent {
+        max-width: 100%;
+        min-width: 250px;
+        width: 100%;
+    }
+    
+    .message.aigent iframe {
+        min-height: 200px;
+    }
+    
+    .container {
+        width: 95%;
+        padding: 20px 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .message.aigent {
+        min-width: 200px;
+        width: 100%;
+    }
+    
+    .message.aigent iframe {
+        min-height: 150px;
+    }
+}
+
+/* Better visual hierarchy for HTML widgets */
+.html-widget-container {
+    box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+html[data-theme="dark"] .html-widget-container {
+    box-shadow: inset 0 0 0 1px var(--border-color);
+}
+
+html[data-theme="memphis"] .html-widget-container {
+    box-shadow: inset 0 0 0 2px var(--border-color);
 }
 
 #messageForm { display: flex; margin-bottom: 20px; }
