@@ -472,6 +472,14 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
         refreshBtn.title = 'Refresh Widget';
         refreshBtn.innerHTML = '↻';
         
+        const stopBtn = document.createElement('button');
+        stopBtn.className = 'widget-stop-btn';
+        stopBtn.title = 'Stop Widget Execution';
+        stopBtn.innerHTML = '■';
+        stopBtn.onclick = () => {
+            iframe.src = 'about:blank';
+        };
+
         const iframe = document.createElement('iframe');
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
@@ -479,15 +487,18 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
         // Set up auto-resizing with the enhanced function
         setupAutoResizingIframe(iframe, htmlContent);
 
+        // FIX: Change the refresh button's behavior to prevent container growth.
+        // It now just reloads the iframe content, letting the original 'onload' handler manage resizing.
         refreshBtn.onclick = () => { 
             if (copyBtn.innerHTML !== '📋') {
                 copyBtn.innerHTML = '📋';
             }
-            setupAutoResizingIframe(iframe, htmlContent);
+            iframe.srcdoc = htmlContent;
         };
 
         widgetContainer.appendChild(copyBtn);
         widgetContainer.appendChild(refreshBtn);
+        widgetContainer.appendChild(stopBtn);
         widgetContainer.appendChild(iframe);
         messageWrapper.appendChild(widgetContainer);
 

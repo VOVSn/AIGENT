@@ -186,7 +186,8 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
 
 /* Common styles for widget buttons, now using Flexbox for centering */
 .widget-copy-btn,
-.widget-refresh-btn {
+.widget-refresh-btn,
+.widget-stop-btn {
     position: absolute;
     top: 4px;
     background: rgba(0,0,0,0.4);
@@ -208,13 +209,19 @@ form button[type="submit"]:hover { background-color: var(--accent-hover); }
 
 .widget-copy-btn { right: 4px; }
 .widget-refresh-btn { right: 32px; }
+.widget-stop-btn { right: 60px; }
 
 .widget-copy-btn:hover { transform: scale(1.1); background: rgba(0,0,0,0.6); }
 .widget-refresh-btn:hover { transform: rotate(90deg); background: rgba(0,0,0,0.6); }
+.widget-stop-btn:hover {
+    transform: scale(1.1);
+    background: rgba(220, 53, 69, 0.8); /* Red for stop/danger */
+}
 
 /* Dark theme adjustments */
 html[data-theme="dark"] .widget-copy-btn,
-html[data-theme="dark"] .widget-refresh-btn {
+html[data-theme="dark"] .widget-refresh-btn,
+html[data-theme="dark"] .widget-stop-btn {
     background: rgba(255,255,255,0.2);
     color: var(--text-primary);
 }
@@ -222,6 +229,10 @@ html[data-theme="dark"] .widget-refresh-btn {
 html[data-theme="dark"] .widget-copy-btn:hover,
 html[data-theme="dark"] .widget-refresh-btn:hover {
     background: rgba(255,255,255,0.3);
+}
+
+html[data-theme="dark"] .widget-stop-btn:hover {
+    background: rgba(255, 82, 99, 0.6); /* Red for stop/danger in dark mode */
 }
 
 html[data-theme="dark"] .message.aigent iframe {
@@ -245,7 +256,8 @@ html[data-theme="memphis"] .message.aigent iframe {
 }
 
 html[data-theme="memphis"] .widget-copy-btn,
-html[data-theme="memphis"] .widget-refresh-btn {
+html[data-theme="memphis"] .widget-refresh-btn,
+html[data-theme="memphis"] .widget-stop-btn {
     background: var(--accent-primary);
     color: white;
     border: 2px solid var(--border-color);
@@ -259,6 +271,11 @@ html[data-theme="memphis"] .widget-copy-btn:hover {
 html[data-theme="memphis"] .widget-refresh-btn:hover {
     background: var(--accent-hover);
     transform: rotate(90deg) scale(1.1);
+}
+
+html[data-theme="memphis"] .widget-stop-btn:hover {
+    background: var(--error-text);
+    transform: scale(1.2);
 }
 
 /* Responsive adjustments */
