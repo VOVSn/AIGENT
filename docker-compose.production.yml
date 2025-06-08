@@ -1,0 +1,122 @@
+services:
+  # This Nginx service is internal to your app. The host Nginx will proxy to it.
+  nginx:
+    image: vovsn/aigent-frontend:latest # Use pre-built image
+    container_name: aigent_nginx_prod
+    restart: always
+    ports:
+      # Expose on port 8080 for the HOST Nginx to connect to.
+      # DO NOT expose this port in your firewall.
+      - "127.0.0.1:8080:80"
+    volumes:
+      # Mounts the shared volume containing Django's admin static files
+      - static_volume:/var/www/static:ro
+    depends_on:
+      - backend
+
+  backend:
+    image: vovsn/aigent-backend:latest # Use pre-built image
+    container_name: aigent_backend_prod
+    restart: always
+    command: >
+      sh -c "
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput --clear &&
+        python manage.py seed_initial_data --overwrite &&
+        uvicorn lba_project.asgi:application --host 0.0.0.0 --port 8000
+      "
+    volumes:
+      # Share static files with the nginx container
+      - static_volume:/app/staticfiles
+      # Mount the single fixture file from the host
+      - ./fixtures/initial_data.json:/app/fixtures/initial_data.json:ro
+      # Optional: Mount log files to the host for easy access
+      - ./app.log:/app/app.log
+      - ./error.log:/app/error.log
+      - ./llm_interaction.log:/app/llm_interaction.log
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  celery_worker:
+    image: vovsn/aigent-backend:latest # Use same backend image
+    container_name: aigent_celery_worker_prod
+    restart: always
+    command: celery -A lba_project worker -l info -P gevent --concurrency=4
+    volumes:
+      - ./app.log:/app/app.log
+      - ./error.log:/app/error.log
+      - ./llm_interaction.log:/app/llm_interaction.log
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  celery_beat:
+    image: vovsn/aigent-backend:latest # Use same backend image
+    container_name: aigent_celery_beat_prod
+    restart: always
+    command: celery -A lba_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - .env
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:15-alpine
+    container_name: aigent_postgres_prod
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: aigent_rabbitmq_prod
+    restart: always
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aigent_redis_prod
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  static_volume:
