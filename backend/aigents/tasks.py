@@ -1,11 +1,11 @@
 # backend/aigents/tasks.py
-# RESTORING THE ORIGINAL, CORRECT IMPLEMENTATION.
-# This code correctly isolates the async network call within a synchronous Celery task.
+# FINAL VERSION with JSON cleaning logic.
 
 import asyncio
 import httpx
 import json
 import logging
+import re # Import the regular expression module
 from datetime import datetime, timezone
 
 from celery import shared_task
@@ -16,6 +16,38 @@ User = get_user_model()
 app_logger = logging.getLogger('aigents')
 llm_logger = logging.getLogger('llm_logger')
 
+# --- NEW HELPER FUNCTION TO CLEAN LLM OUTPUT ---
+def extract_json_from_text(text: str) -> str:
+    """
+    Finds and extracts the first valid JSON object or array from a string.
+    Handles text/thoughts before or after the JSON block.
+    """
+    # This regex looks for a string that starts with { or [ and ends with } or ]
+    # It is non-greedy and handles nested structures.
+    json_match = re.search(r'\{[^{}]*\}|\[[^\[\]]*\]', text.replace('\'', '\"').replace('`', ''))
+    
+    if json_match:
+        json_string = json_match.group(0)
+        # A more robust regex to find the largest valid JSON object
+        # It handles nested brackets and braces.
+        match = re.search(r'\{.*\}|\[.*\]', text, re.DOTALL)
+        if match:
+            potential_json = match.group(0)
+            # Clean up common model mistakes like trailing commas
+            # Before a closing brace or bracket
+            potential_json = re.sub(r',\s*([}\]])', r'\1', potential_json)
+            try:
+                # Test if it's valid JSON
+                json.loads(potential_json)
+                app_logger.info("Successfully extracted JSON from LLM response.")
+                return potential_json
+            except json.JSONDecodeError:
+                app_logger.warning("Found a JSON-like block, but it failed to parse. Returning original text.")
+                pass
+
+    app_logger.warning("Could not find a valid JSON block in the LLM response.")
+    return text # Return original text if no JSON is found
+
 # --- Async Helper for Network I/O ---
 async def make_ollama_request(url, payload, timeout):
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -23,7 +55,7 @@ async def make_ollama_request(url, payload, timeout):
         response.raise_for_status()
         return response.json()
 
-# --- Synchronous Wrapper Functions (The Correct Pattern) ---
+# --- Synchronous Wrapper Functions ---
 
 def get_required_objects_wrapper(user_id: int):
     try:
@@ -42,16 +74,19 @@ def get_required_objects_wrapper(user_id: int):
     return active_aigent, user, prompt_template_obj
 
 def serialize_user_state_wrapper(user_instance):
+    # ... (no changes to this function)
     if user_instance and isinstance(user_instance.user_state, dict):
         return json.dumps(user_instance.user_state, indent=2)
     return json.dumps({})
 
 def serialize_aigent_state_wrapper(aigent_instance):
+    # ... (no changes to this function)
     if aigent_instance and isinstance(aigent_instance.aigent_state, dict):
         return json.dumps(aigent_instance.aigent_state, indent=2)
     return json.dumps({})
 
 def get_formatted_chat_history_wrapper(user_instance, aigent_instance, limit=10):
+    # ... (no changes to this function)
     try:
         chat_history_obj = ChatHistory.objects.get(user=user_instance, aigent=aigent_instance)
         history_list = chat_history_obj.history if isinstance(chat_history_obj.history, list) else []
@@ -65,6 +100,7 @@ def get_formatted_chat_history_wrapper(user_instance, aigent_instance, limit=10)
         return "Error retrieving conversation history."
 
 def update_chat_history_wrapper(user, active_aigent, user_message_content, answer_to_user):
+    # ... (no changes to this function)
     history_obj, created = ChatHistory.objects.get_or_create(
         user=user, aigent=active_aigent, defaults={'history': []}
     )
@@ -80,7 +116,7 @@ def update_chat_history_wrapper(user, active_aigent, user_message_content, answe
     app_logger.info(f"Chat history updated for user {user.id} with aigent {active_aigent.id}")
 
 def update_states_wrapper(user, aigent, new_user_state, new_aigent_state):
-    """Synchronous wrapper to save updated states."""
+    # ... (no changes to this function)
     try:
         if isinstance(new_user_state, dict):
             user.user_state = new_user_state
@@ -95,7 +131,7 @@ def update_states_wrapper(user, aigent, new_user_state, new_aigent_state):
         app_logger.error(f"Failed to update states for user {user.id} in wrapper: {str(e)}")
         raise
 
-# --- Main Celery Task (The working, original implementation) ---
+# --- Main Celery Task (with JSON cleaning) ---
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def process_user_message_to_aigent(self, user_id: int, user_message_content: str):
     task_id = self.request.id
@@ -103,8 +139,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
     
     try:
         active_aigent, user, prompt_template_obj = get_required_objects_wrapper(user_id)
-        app_logger.info(f"Task {task_id}: Found active Aigent: {active_aigent.name}, User: {user.username}, Prompt: {prompt_template_obj.name}")
-
+        # ... (rest of the setup is the same)
         user_state_str = serialize_user_state_wrapper(user)
         aigent_state_str = serialize_aigent_state_wrapper(active_aigent)
         formatted_chat_history_str = get_formatted_chat_history_wrapper(user, active_aigent)
@@ -127,21 +162,26 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
         ollama_api_url_target = f"{ollama_api_url_base.rstrip('/')}/api/generate"
 
         payload = {"model": active_aigent.ollama_model_name, "prompt": full_prompt, "stream": False, "format": "json", "options": {}}
+        # ... (payload setup is the same)
         if active_aigent.ollama_temperature is not None: payload["options"]["temperature"] = active_aigent.ollama_temperature
         if active_aigent.ollama_context_length is not None: payload["options"]["num_ctx"] = active_aigent.ollama_context_length
         if not payload["options"]: del payload["options"]
 
         async def make_request_and_process():
+            # ... (no changes inside this async function)
             app_logger.info(f"Task {task_id}: Sending request to Ollama: {ollama_api_url_target} with model {payload['model']}")
             ollama_data = await make_ollama_request(ollama_api_url_target, payload, active_aigent.request_timeout_seconds)
             
-            llm_json_output_str = ollama_data.get("response")
-            if not llm_json_output_str:
+            llm_raw_output = ollama_data.get("response")
+            if not llm_raw_output:
                 raise ValueError("Ollama response missing 'response' field.")
             
-            llm_logger.info(f"--- LLM RAW JSON RESPONSE (Task: {task_id}) ---\n{llm_json_output_str}\n---")
+            llm_logger.info(f"--- LLM RAW RESPONSE (Task: {task_id}) ---\n{llm_raw_output}\n---")
             
-            structured_llm_output = json.loads(llm_json_output_str)
+            # --- APPLY THE CLEANING STEP HERE ---
+            cleaned_json_str = extract_json_from_text(llm_raw_output)
+            
+            structured_llm_output = json.loads(cleaned_json_str)
             required_keys = ["answer_to_user", "updated_aigent_state", "updated_user_state"]
             if not all(key in structured_llm_output for key in required_keys):
                 missing = [key for key in required_keys if key not in structured_llm_output]
@@ -151,6 +191,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
 
         structured_llm_output = asyncio.run(make_request_and_process())
         
+        # ... (rest of the task is the same)
         updated_user_state = structured_llm_output["updated_user_state"]
         updated_aigent_state = structured_llm_output["updated_aigent_state"]
         update_states_wrapper(user, active_aigent, updated_user_state, updated_aigent_state)
@@ -166,6 +207,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             "updated_user_state_debug": updated_user_state
         }
 
+    # ... (Exception handling is the same)
     except (Aigent.DoesNotExist, User.DoesNotExist, Prompt.DoesNotExist) as e:
         err_msg = f"Task {task_id} ({type(e).__name__}): {str(e)}"
         app_logger.error(err_msg)
@@ -185,8 +227,8 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
         app_logger.info(f"Task {task_id}: Retrying (RequestError)...")
         raise self.retry(countdown=int(self.default_retry_delay * (self.request.retries + 1)), exc=e)
     
-    except ValueError as e:
-        err_msg = f"Task {task_id} (ValueError): {str(e)}"
+    except (ValueError, json.JSONDecodeError) as e:
+        err_msg = f"Task {task_id} (ValueError/JSONDecodeError): {e}"
         app_logger.error(err_msg)
         raise Exception(err_msg)
     
