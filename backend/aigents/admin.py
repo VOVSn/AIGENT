@@ -10,46 +10,40 @@ class PromptAdmin(admin.ModelAdmin):
 
 @admin.register(Aigent)
 class AigentAdmin(admin.ModelAdmin):
-    # UPDATED: Reorganized the admin view for better clarity
-    list_display = ('name', 'is_active', 'presentation_format', 'ollama_model_name', 'default_prompt_template', 'created_at')
-    list_filter = ('is_active', 'presentation_format', 'ollama_model_name')
+    # Controls the columns displayed in the main Aigent list
+    list_display = ('name', 'is_active', 'presentation_format', 'ollama_model_name')
+    
+    # Adds a filter sidebar
+    list_filter = ('is_active', 'presentation_format', 'created_at')
+    
+    # Adds a search bar
     search_fields = ('name', 'system_persona_prompt')
     
-    # NEW: Added readonly_fields for our pretty JSON display
-    readonly_fields = ('aigent_state_display',)
-
-    # NEW: Organized the fields into logical sections using fieldsets
+    # This is the key change: It creates a user-friendly dual-listbox
+    # widget for selecting tools, which is much better than the default.
+    filter_horizontal = ('tools',)
+    
+    # Organizes the fields on the Aigent edit/add page into logical groups
     fieldsets = (
-        ('Core Information', {
-            'fields': ('name', 'is_active', 'presentation_format')
+        ('Core Configuration', {
+            'fields': ('name', 'is_active', 'system_persona_prompt')
         }),
-        ('Persona & Prompting', {
-            'fields': ('system_persona_prompt', 'default_prompt_template')
+        ('Presentation & Prompting', {
+            'fields': ('presentation_format', 'default_prompt_template')
         }),
-        ('Ollama Configuration', {
-            'fields': (
-                'ollama_model_name', 
-                'ollama_endpoints', 
-                'ollama_temperature', 
-                'ollama_context_length', 
-                'request_timeout_seconds'
-            )
+        # The 'Capabilities' section now neatly contains our tool selector
+        ('Capabilities (Tools)', {
+            'fields': ('tools',)
         }),
-        ('Aigent State', {
-            'classes': ('collapse',), # Make this section collapsible
-            'fields': ('aigent_state_display',), # Use our new pretty display field
+        ('LLM Parameters', {
+            'classes': ('collapse',), # This section will be collapsible
+            'fields': ('ollama_model_name', 'ollama_endpoints', 'ollama_temperature', 'ollama_context_length', 'request_timeout_seconds')
+        }),
+        ('Internal State (Advanced)', {
+            'classes': ('collapse',),
+            'fields': ('aigent_state',)
         }),
     )
-
-    # NEW: Method to render the aigent_state JSON beautifully
-    def aigent_state_display(self, obj):
-        """Creates a pretty-printed, read-only view of the JSON state."""
-        if obj.aigent_state:
-            formatted_json = json.dumps(obj.aigent_state, indent=2)
-            # Wrap in <pre> tags to preserve formatting
-            return format_html("<pre>{}</pre>", formatted_json)
-        return "State is empty."
-    aigent_state_display.short_description = 'Formatted Aigent State'
 
 
 @admin.register(ChatHistory)

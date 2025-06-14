@@ -1,21 +1,17 @@
+# docker-compose.yml
 services:
   #################################################
   # NGINX - PUBLIC ENTRYPOINT & FRONTEND SERVER
   #################################################
   nginx:
-    # This service is the main entry point for all web traffic.
-    # It serves the static frontend files and reverse-proxies API calls to the backend.
     build:
       context: ./frontend
     container_name: aigent_nginx
     ports:
-      - "8080:80" # Maps host port 8080 to Nginx's port 80
+      - "8080:80"
     volumes:
-      # Mounts the frontend code (HTML/CSS/JS) into the Nginx container
       - ./frontend/public:/usr/share/nginx/html:ro
-      # Mounts our custom Nginx configuration
       - ./nginx:/etc/nginx/conf.d:ro
-      # Mounts the shared volume containing Django's admin static files (read-only)
       - static_volume:/var/www/static:ro
     depends_on:
       - backend
@@ -29,29 +25,16 @@ services:
     command: >
       sh -c "
         echo 'Backend container starting...' &&
-        echo 'Waiting for PostgreSQL to be healthy...' &&
-        # relies on depends_on with condition: service_healthy
-
-        echo 'Applying database migrations...' &&
+        echo 'Waiting for dependencies to be healthy...' &&
         python manage.py migrate --noinput &&
-
-        echo 'Collecting static files for admin...' &&
         python manage.py collectstatic --noinput --clear &&
-
-        echo 'Running initial data seeding...' &&
         python manage.py seed_initial_data --overwrite &&
-
         echo 'Starting Uvicorn server...' &&
         uvicorn lba_project.asgi:application --host 0.0.0.0 --port 8000
       "
     volumes:
-      - ./backend:/app # Mounts the backend code for development
-      - static_volume:/app/staticfiles # Populates the shared static volume
-      # Mount log files to the host for easy access
-      - ./app.log:/app/app.log
-      - ./error.log:/app/error.log
-      - ./llm_interaction.log:/app/llm_interaction.log
-    # Ports are no longer exposed to the host; Nginx handles communication.
+      - ./backend:/app
+      - static_volume:/app/staticfiles
     env_file:
       - .env
     depends_on:
@@ -61,22 +44,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      searxng: # <-- ADD THIS
+      searxng: # <-- ADDED
         condition: service_healthy
-    # On Linux, add this to allow the container to reach the host (for Ollama)
     extra_hosts:
-      - "host.docker.internal:host-gateway"
-    # --- START MODIFICATION ---
+     - "host.docker.internal:host-gateway"
     healthcheck:
-      # This check will only pass once the Uvicorn server is running (which happens after migrations).
-      # We use curl (installed in the Dockerfile) to check the admin login page,
-      # which is a reliable endpoint that doesn't require authentication to access.
       test: ["CMD-SHELL", "curl -f http://localhost:8000/admin/login/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    # --- END MODIFICATION ---
 
   #################################################
   # CELERY WORKER & BEAT
@@ -87,22 +64,19 @@ services:
     command: celery -A lba_project worker -l info -P gevent --concurrency=4
     volumes:
       - ./backend:/app
-      - ./app.log:/app/app.log
-      - ./error.log:/app/error.log
-      - ./llm_interaction.log:/app/llm_interaction.log
     env_file:
       - .env
     depends_on:
       backend:
-        condition: service_healthy # Changed from service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
-      searxng:
+      searxng: # <-- ADDED
         condition: service_healthy
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+     - "host.docker.internal:host-gateway"
 
   celery_beat:
     build: ./backend
@@ -112,17 +86,15 @@ services:
       - ./backend:/app
     env_file:
       - .env
-    # --- START MODIFICATION ---
     depends_on:
       backend:
-        condition: service_healthy # Changed from service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # --- END MODIFICATION ---
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+     - "host.docker.internal:host-gateway"
 
   #################################################
   # MONITORING & BACKING SERVICES
@@ -192,36 +164,49 @@ services:
       retries: 5
       start_period: 10s
 
+  #################################################
+  # NEW: SEARXNG SERVICE AND ITS REDIS
+  #################################################
   searxng:
     image: searxng/searxng:latest
     container_name: aigent_searxng
+    hostname: searxng
     volumes:
       - ./searxng:/etc/searxng:rw
     environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
       - SEARXNG_SECRET_KEY=${DJANGO_SECRET_KEY}
-      - SEARXNG_DEBUG=1
-      - SEARXNG_BIND_ADDRESS=0.0.0.0:8080
-      # CRITICAL: Disable bot detection
-      - SEARXNG_DISABLE_CHECKER=1
-      - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
-    ports:
-      - "8081:8080"
-    restart: unless-stopped
-    # Run as root to avoid permission issues
-    user: "0:0"
-    # Override the default command to disable additional security
-    command: >
-      sh -c "
-        echo 'Starting SearXNG with disabled security...' &&
-        python -m searx.webapp --host 0.0.0.0 --port 8080
-      "
+    # No ports exposed to host by default, only internal access needed
+    # You can add - "8888:8080" to access its UI for debugging
+    depends_on:
+      - searxng_redis
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider --proxy=off http://localhost:8080/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider --proxy=off http://localhost:8080 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
 
+  searxng_redis:
+    image: redis:alpine
+    container_name: aigent_searxng_redis
+    hostname: searxng_redis
+    command: redis-server --save "" --appendonly "no"
+    tmpfs:
+      - /var/lib/redis
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 #################################################
 # VOLUMES
@@ -230,4 +215,5 @@ volumes:
   postgres_data:
   rabbitmq_data:
   redis_data:
-  static_volume: # Shared volume for Django admin static files
+  static_volume:
+  searxng: {} # Added volume for searxng config
