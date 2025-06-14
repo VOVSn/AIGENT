@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'users.apps.UsersConfig',
     'aigents.apps.AigentsConfig',
+    'tools.apps.ToolsConfig',
 ]
 
 MIDDLEWARE = [
@@ -96,7 +97,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
+    # BASE_DIR / "static",
 ]
 
 # Default primary key field type
@@ -201,4 +202,6 @@ CSRF_COOKIE_SECURE = True
 # to make POST requests.
 CSRF_TRUSTED_ORIGINS = [
     'https://aigent.vovsn.com',
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
 ]
