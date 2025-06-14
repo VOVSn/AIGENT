@@ -136,45 +136,56 @@ LOGGING = {
             'style': '{',
         },
         'simple': {
-            'format': '{levelname} {asctime} {name} {message}',
+            'format': '{levelname} {asctime} {name}: {message}',
             'style': '{',
         },
     },
     'handlers': {
+        # Handler for all logs EXCEPT the LLM interactions. Outputs to console.
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
+        # Handler specifically for LLM interactions. Outputs to a file.
+        'llm_file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'llm_interaction.log', # Correct path inside the container
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
+        # Standard Django logger
         'django': {
-            'handlers': ['console'], # Only use console
+            'handlers': ['console'],
             'level': env('DJANGO_LOG_LEVEL', default='INFO'),
             'propagate': True,
         },
+        # General application loggers
         'users': {
-            'handlers': ['console'], # Only use console
+            'handlers': ['console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
         'aigents': {
-            'handlers': ['console'], # Only use console
+            'handlers': ['console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
         'celery': {
-            'handlers': ['console'], # Only use console
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
         },
+        # The special logger for LLM interactions
         'llm_logger': {
-            'handlers': ['console'], # Only use console
+            'handlers': ['llm_file'], # <-- This is the key change
             'level': 'INFO',
-            'propagate': False,
+            'propagate': False, # <-- Crucial: prevents logs from also going to console
         }
     },
+    # Root logger catches everything else
     'root': {
-        'handlers': ['console'], # Only use console
+        'handlers': ['console'],
         'level': 'WARNING',
     }
 }
