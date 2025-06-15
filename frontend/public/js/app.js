@@ -146,11 +146,31 @@ async function setupPage() {
 
 async function populateAigentSelector() {
     const selector = document.getElementById('aigent-selector');
+    const aigentNameDisplay = document.getElementById('aigentNameDisplay'); // Get the new element
+
     if (!selector) return;
 
     try {
         const aigents = await apiFetch('/api/v1/aigents/list/');
         selector.innerHTML = ''; // Clear existing options
+
+        // Find the active aigent first to set the display
+        const activeAigent = aigents.find(a => a.is_active);
+        if (activeAigent) {
+            // Set global state for the active aigent
+            currentAigent.id = activeAigent.id;
+            currentAigent.name = activeAigent.name;
+            currentAigent.presentationFormat = activeAigent.presentation_format;
+            
+            // --- NEW: Update the header display ---
+            if (aigentNameDisplay) {
+                aigentNameDisplay.textContent = activeAigent.name;
+            }
+        } else if (aigentNameDisplay) {
+             aigentNameDisplay.textContent = 'N/A'; // Handle case where no aigent is active
+        }
+
+        // Now populate the selector dropdown
         aigents.forEach(aigent => {
             const option = document.createElement('option');
             option.value = aigent.id;
@@ -158,15 +178,12 @@ async function populateAigentSelector() {
             option.dataset.presentationFormat = aigent.presentation_format;
             if (aigent.is_active) {
                 option.selected = true;
-                // Set global state for the active aigent
-                currentAigent.id = aigent.id;
-                currentAigent.name = aigent.name;
-                currentAigent.presentationFormat = aigent.presentation_format;
             }
             selector.appendChild(option);
         });
     } catch (error) {
         console.error("Failed to populate aigents:", error);
+        if (aigentNameDisplay) aigentNameDisplay.textContent = 'Error';
     }
 }
 
@@ -176,6 +193,7 @@ async function handleAigentSwitch(event) {
     const selectedOption = selector.options[selector.selectedIndex];
     const newAigentName = selectedOption.text;
     const newPresentationFormat = selectedOption.dataset.presentationFormat;
+    const aigentNameDisplay = document.getElementById('aigentNameDisplay'); // Get the new element
 
     try {
         await apiFetch('/api/v1/aigents/set_active/', {
@@ -186,6 +204,11 @@ async function handleAigentSwitch(event) {
         currentAigent.name = newAigentName;
         currentAigent.presentationFormat = newPresentationFormat;
 
+        // --- NEW: Update the header display ---
+        if (aigentNameDisplay) {
+            aigentNameDisplay.textContent = newAigentName;
+        }
+
         const chatMessagesDiv = document.getElementById('chatMessages');
         if (chatMessagesDiv) chatMessagesDiv.innerHTML = '';
         await loadChatHistory();
@@ -195,6 +218,8 @@ async function handleAigentSwitch(event) {
         console.error("Failed to switch aigent:", error);
         appendMessageToChat('system', `Error switching aigent: ${error.message}`, new Date().toISOString(), true, 'error');
         selector.value = currentAigent.id; // Revert selector to old value on failure
+        // Revert name display on failure as well
+        if (aigentNameDisplay) aigentNameDisplay.textContent = currentAigent.name;
     } finally {
         const settingsMenu = document.getElementById('settings-menu');
         if (settingsMenu) settingsMenu.classList.remove('active');
