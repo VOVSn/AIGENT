@@ -9,8 +9,11 @@ let currentAigent = {
 };
 // Stores information about the logged-in user
 let currentUser = {
-    username: 'Guest'
+    username: 'Guest',
+    user_state: {}
 };
+let calendarRendered = false; // Flag to check if calendar has been rendered once
+
 
 // --- THEME MANAGEMENT ---
 const THEMES = ['light', 'dark', 'memphis'];
@@ -115,7 +118,7 @@ async function setupPage() {
     // Fetch current user data and then set up the rest of the page
     try {
         const user = await apiFetch('/api/v1/auth/me/');
-        currentUser = user;
+        currentUser = user; // Store the full user object, including user_state
         const usernameDisplayEl = document.getElementById('usernameDisplay');
         if (usernameDisplayEl) {
             usernameDisplayEl.textContent = currentUser.username;
@@ -123,6 +126,7 @@ async function setupPage() {
 
         // Once user is confirmed, proceed with page setup
         await populateAigentSelector();
+        initializeTabs(); // NEW: Set up tab functionality
         loadChatHistory();
 
         const messageForm = document.getElementById('messageForm');
@@ -224,6 +228,76 @@ async function handleAigentSwitch(event) {
         const settingsMenu = document.getElementById('settings-menu');
         if (settingsMenu) settingsMenu.classList.remove('active');
     }
+}
+
+
+// --- NEW: TAB MANAGEMENT ---
+function initializeTabs() {
+    const tabLinks = document.querySelectorAll('.tab-link');
+    tabLinks.forEach(link => {
+        link.addEventListener('click', switchTab);
+    });
+}
+
+function switchTab(event) {
+    const clickedTab = event.currentTarget;
+    const tabId = clickedTab.dataset.tab;
+
+    // Remove active state from all tabs and panes
+    document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+    // Add active state to the clicked tab and corresponding pane
+    clickedTab.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+
+    // Special handling for calendar tab
+    if (tabId === 'calendar' && !calendarRendered) {
+        renderCalendar();
+        calendarRendered = true; // Set flag to prevent re-rendering
+    }
+}
+
+
+// --- NEW: CALENDAR RENDERING ---
+function renderCalendar() {
+    const container = document.getElementById('calendar-events-container');
+    if (!container) return;
+
+    container.innerHTML = ''; // Clear previous content
+
+    const events = currentUser?.user_state?.calendar_events;
+
+    if (!events || events.length === 0) {
+        container.innerHTML = `<div class="no-events-message">No calendar events found.</div>`;
+        return;
+    }
+    
+    const eventsList = document.createElement('div');
+    eventsList.id = 'calendar-events';
+    
+    events.forEach(event => {
+        const eventItem = document.createElement('div');
+        eventItem.className = 'calendar-event-item';
+
+        const title = document.createElement('h3');
+        title.textContent = event.title || 'Untitled Event';
+        
+        const time = document.createElement('div');
+        time.className = 'event-time';
+        const startTime = new Date(event.start_time_utc).toLocaleString();
+        const endTime = new Date(event.end_time_utc).toLocaleString();
+        time.textContent = `${startTime} - ${endTime}`;
+
+        const description = document.createElement('p');
+        description.className = 'event-description';
+        description.textContent = event.description || 'No description provided.';
+        
+        eventItem.append(title, time, description);
+        eventsList.appendChild(eventItem);
+    });
+    
+    container.appendChild(eventsList);
 }
 
 
