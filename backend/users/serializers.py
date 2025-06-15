@@ -9,7 +9,11 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'user_state')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'user_state', 'timezone')
+        # Make timezone writable for PATCH requests, but not required
+        extra_kwargs = {
+            'timezone': {'required': False}
+        }
 
 
 class PasswordChangeSerializer(serializers.Serializer):

@@ -17,6 +17,40 @@ User = get_user_model()
 app_logger = logging.getLogger('aigents')
 llm_logger = logging.getLogger('llm_logger')
 
+# --- NEW: Data Sanitization Helper ---
+def _sanitize_calendar_events(events_list: list) -> list:
+    """
+    Cleans up calendar event data from an LLM.
+    - Renames 'utc_start_time' to 'start_time_utc' and 'utc_end_time' to 'end_time_utc'.
+    - Removes local time keys to only store UTC.
+    """
+    if not isinstance(events_list, list):
+        return []
+
+    sanitized_list = []
+    for event in events_list:
+        if not isinstance(event, dict):
+            continue
+
+        # Correct the key names
+        if 'utc_start_time' in event and 'start_time_utc' not in event:
+            event['start_time_utc'] = event.pop('utc_start_time')
+        if 'utc_end_time' in event and 'end_time_utc' not in event:
+            event['end_time_utc'] = event.pop('utc_end_time')
+
+        # Remove local time keys if they exist, we only want UTC
+        event.pop('start_time', None)
+        event.pop('end_time', None)
+
+        # Ensure the essential keys are present before adding
+        if 'start_time_utc' in event and 'end_time_utc' in event:
+            sanitized_list.append(event)
+        else:
+            app_logger.warning(f"Skipping malformed calendar event: {event}")
+
+    return sanitized_list
+
+
 # --- Tool-Related Prompt Generation Helpers ---
 
 TOOL_USE_INSTRUCTIONS = """--- INSTRUCTIONS FOR YOUR RESPONSE ---
@@ -134,12 +168,19 @@ def update_chat_history_wrapper(user, aigent, user_message_content, answer_to_us
 def update_states_wrapper(user, aigent, new_user_state, new_aigent_state):
     try:
         if isinstance(new_user_state, dict):
+            # --- MODIFIED: Sanitize calendar events before assigning to user ---
+            if 'calendar_events' in new_user_state:
+                new_user_state['calendar_events'] = _sanitize_calendar_events(new_user_state['calendar_events'])
             user.user_state = new_user_state
-            user.save(update_fields=['user_state'])
+            # Don't save user here, it will be saved after potential timezone update
         if isinstance(new_aigent_state, dict):
             aigent.aigent_state = new_aigent_state
             aigent.save(update_fields=['aigent_state'])
+        
+        # Save the user model last, after all potential updates are applied.
+        user.save()
         app_logger.info(f"Updated states for user {user.id} and aigent {aigent.id}")
+
     except Exception as e:
         app_logger.error(f"Failed to update states in wrapper: {str(e)}", exc_info=True)
         raise
@@ -165,6 +206,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
 
         prompt_placeholders = {
             "current_utc_datetime": datetime.now(timezone.utc).isoformat(),
+            "user_timezone": user.timezone, # <-- NEW
             "system_persona_prompt": active_aigent.system_persona_prompt,
             "user_state": user_state_str,
             "chat_history": formatted_chat_history_str,

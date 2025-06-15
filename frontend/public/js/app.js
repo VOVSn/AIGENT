@@ -10,7 +10,8 @@ let currentAigent = {
 // Stores information about the logged-in user
 let currentUser = {
     username: 'Guest',
-    user_state: {}
+    user_state: {},
+    timezone: 'UTC'
 };
 let calendarRendered = false; // Flag to check if calendar has been rendered once
 
@@ -124,6 +125,9 @@ async function setupPage() {
             usernameDisplayEl.textContent = currentUser.username;
         }
 
+        // --- NEW: Timezone Synchronization ---
+        await syncUserTimezone();
+
         // Once user is confirmed, proceed with page setup
         await populateAigentSelector();
         initializeTabs(); // NEW: Set up tab functionality
@@ -145,6 +149,30 @@ async function setupPage() {
     } catch (error) {
         console.error("Failed to set up page, likely auth issue.", error);
         logout();
+    }
+}
+
+// --- NEW: Timezone Synchronization Function ---
+async function syncUserTimezone() {
+    try {
+        // Get browser's IANA timezone name
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        // If the browser's timezone is different from what's stored, update the backend
+        if (currentUser.timezone !== browserTimezone) {
+            console.log(`Timezone mismatch. Stored: ${currentUser.timezone}, Browser: ${browserTimezone}. Updating...`);
+            const updatedUser = await apiFetch('/api/v1/auth/me/', {
+                method: 'PATCH',
+                body: JSON.stringify({ timezone: browserTimezone })
+            });
+            // Update the global user object with the fresh data from the server
+            currentUser = updatedUser;
+            console.log(`Timezone updated successfully to ${currentUser.timezone}`);
+        }
+    } catch (error) {
+        console.error("Failed to sync user timezone:", error);
+        // This is not a critical failure, so we don't need to log out.
+        // The aigent will just use the last known timezone or the default 'UTC'.
     }
 }
 
@@ -276,7 +304,10 @@ function renderCalendar() {
     const eventsList = document.createElement('div');
     eventsList.id = 'calendar-events';
     
-    events.forEach(event => {
+    // Sort events by start time before rendering
+    const sortedEvents = [...events].sort((a, b) => new Date(a.start_time_utc) - new Date(b.start_time_utc));
+
+    sortedEvents.forEach(event => {
         const eventItem = document.createElement('div');
         eventItem.className = 'calendar-event-item';
 
@@ -285,6 +316,7 @@ function renderCalendar() {
         
         const time = document.createElement('div');
         time.className = 'event-time';
+        // This correctly displays the UTC time in the user's local browser timezone
         const startTime = new Date(event.start_time_utc).toLocaleString();
         const endTime = new Date(event.end_time_utc).toLocaleString();
         time.textContent = `${startTime} - ${endTime}`;
@@ -409,6 +441,13 @@ async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
             if (typingIndicator) typingIndicator.style.display = 'none';
             if (data.result && data.result.answer_to_user) {
                 appendMessageToChat('aigent', data.result.answer_to_user, new Date().toISOString());
+                // After a successful response that might have updated the state, refresh user data
+                // and re-render the calendar if it's visible.
+                const updatedUser = await apiFetch('/api/v1/auth/me/');
+                currentUser = updatedUser;
+                if (document.getElementById('calendar').classList.contains('active')) {
+                    renderCalendar();
+                }
             } else {
                 appendMessageToChat('system', 'Aigent responded but the answer was unclear.', new Date().toISOString(), true, 'error');
             }

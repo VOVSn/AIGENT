@@ -32,6 +32,12 @@ class User(AbstractUser):
         blank=True,
         help_text="Stores user-specific persistent state across sessions, modifiable by Aigents."
     )
+    # --- NEW FIELD ---
+    timezone = models.CharField(
+        max_length=50,
+        default='UTC',
+        help_text="The user's IANA timezone name (e.g., 'America/New_York')."
+    )
 
     def __str__(self):
         return self.username

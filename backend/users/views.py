@@ -10,13 +10,24 @@ User = get_user_model()
 
 class MeView(APIView):
     """
-    An endpoint to get the current authenticated user's details.
+    An endpoint to get or update the current authenticated user's details.
     """
     permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request, *args, **kwargs):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request, *args, **kwargs):
+        """
+        Allows partial updates to the user model (e.g., updating the timezone).
+        """
+        user = request.user
+        serializer = UserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordChangeView(generics.GenericAPIView):
