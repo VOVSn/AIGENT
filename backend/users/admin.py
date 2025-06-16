@@ -4,8 +4,26 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 import json
-from .models import User, get_default_user_state # <-- IMPORT the default state function
+from .models import User, get_default_user_state, CalendarEvent # <-- IMPORT CalendarEvent
 
+# --- NEW: Admin configuration for CalendarEvent model ---
+@admin.register(CalendarEvent)
+class CalendarEventAdmin(admin.ModelAdmin):
+    """
+    Admin view for Calendar Events.
+    """
+    list_display = ('title', 'user', 'start_time', 'end_time', 'created_at')
+    list_filter = ('user', 'start_time')
+    search_fields = ('title', 'description', 'user__username')
+    
+    # Define the fields to be displayed in the form, in order
+    fields = ('user', 'title', 'description', 'start_time', 'end_time')
+    
+    # Make foreign key 'user' searchable instead of a dropdown for performance
+    raw_id_fields = ('user',)
+
+
+    
 # To display the custom 'user_state' field in the admin.
 class UserAdmin(BaseUserAdmin):
     

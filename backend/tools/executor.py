@@ -1,6 +1,8 @@
 # backend/tools/executor.py
 import logging
 import importlib
+import inspect
+import asyncio # <-- NEW IMPORT
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +28,12 @@ def get_tool_function(tool_name: str):
         logger.error(f"Failed to get function for tool '{tool_name}' from path '{import_path}'.")
         return None
 
-# UPDATED: This function is now synchronous
+# UPDATED: This function is now SYNCHRONOUS, but can call ASYNC tools.
 def execute_tool(tool_name: str, parameters: dict) -> str:
     """
-    Dynamically imports and executes a registered tool by name with the given parameters.
-    This is now a SYNCHRONOUS function.
-    Returns a string observation of the tool's result.
+    Dynamically imports and executes a registered tool by name.
+    This executor is SYNCHRONOUS, but it can correctly run both
+    sync and async tool functions.
     """
     logger.info(f"Executing tool '{tool_name}' with parameters: {parameters}")
     
@@ -41,8 +43,14 @@ def execute_tool(tool_name: str, parameters: dict) -> str:
         return f"Error: Tool '{tool_name}' is not available or configured incorrectly."
 
     try:
-        # No longer awaiting the result
-        result = tool_function(**parameters)
+        # Check if the tool function is a coroutine function (async def)
+        if inspect.iscoroutinefunction(tool_function):
+            # If it's async, run it in its own event loop.
+            result = asyncio.run(tool_function(**parameters))
+        else:
+            # If it's sync, run it directly.
+            result = tool_function(**parameters)
+            
         logger.info(f"Tool '{tool_name}' executed successfully.")
         return str(result)
     except TypeError as e:

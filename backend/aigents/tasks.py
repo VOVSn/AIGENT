@@ -238,7 +238,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
                     tool_params['user_id'] = user_id
                     app_logger.info(f"Task {task_id}: Injected user_id={user_id} into parameters for tool '{tool_name}'.")
 
-            # Execute the tool synchronously
+            # Execute the tool synchronously. The executor will handle running async tools if needed.
             tool_observation_results = tool_executor.execute_tool(tool_name, tool_params)
             llm_logger.info(f"--- TOOL RESULTS (Task: {task_id}) ---\n{tool_observation_results}\n---")
 
