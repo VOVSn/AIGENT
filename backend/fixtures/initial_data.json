@@ -6,12 +6,25 @@
       "parameters_schema": {
         "query": "The specific and concise search query string."
       }
+    },
+    {
+      "name": "manage_calendar",
+      "description": "Manages the user's calendar events. Use this to add, list, update, or delete events. To update or delete, you must first 'list' events to get their IDs. Always confirm with the user after an action is completed. The system will automatically handle the user's ID.",
+      "parameters_schema": {
+        "action": "The operation to perform: 'add', 'list', 'update', or 'delete'.",
+        "title": "(Optional) The title of the event.",
+        "description": "(Optional) A description for the event.",
+        "start_time": "(Optional) The event start time in 'YYYY-MM-DD HH:MM:SS' format, interpreted in the user's local timezone.",
+        "end_time": "(Optional) The event end time in 'YYYY-MM-DD HH:MM:SS' format, interpreted in the user's local timezone.",
+        "event_id": "(Optional) The numeric ID of the event to update or delete.",
+        "updates": "(Optional) A dictionary of fields to change for an 'update' action. e.g. {'title': 'New Title', 'start_time': '2025-06-17 11:00:00'}"
+      }
     }
   ],
   "prompts": [
     {
       "name": "StandardChatInteraction_v1",
-      "template_str": "You are interacting with a user. Be helpful and follow all instructions.\n\n--- TIME & STATE CONTEXT ---\nCurrent UTC Datetime: {current_utc_datetime}\nUser's Timezone (IANA Format): {user_timezone}\nIMPORTANT TIME INSTRUCTIONS:\n1. When the user mentions a time (e.g., '2 PM', 'tomorrow morning'), you MUST interpret it in their timezone ('{user_timezone}').\n2. All timestamps you generate in the 'updated_user_state' must be converted to UTC and formatted as ISO 8601 strings (e.g., 'YYYY-MM-DDTHH:mm:ssZ').\n3. When creating a calendar event, the object in the `calendar_events` list MUST have these exact keys: `event_id` (a unique string), `title`, `description`, `start_time_utc`, and `end_time_utc`. Do NOT use keys like 'utc_start_time' or 'start_time'.\n\n--- CONVERSATION & STATE ---\nYour Previous Conversation with User:\n{chat_history}\n\nUser's Current Message:\n{current_user_message}\n\nYour Current Aigent State:\n{aigent_state}\n\nCurrent User State (example structure):\n{user_state}\n\n{system_persona_prompt}\n\n{available_tools}\n\nNow, carefully consider the user's request. Based on your personality and the tools you have, decide on your next action.\n\n{tool_use_instructions}\n\nPlease provide a structured JSON response. Ensure your entire output is a single valid JSON object.\nYour JSON response:"
+      "template_str": "You are interacting with a user. Be helpful and follow all instructions.\n\n--- TIME & STATE CONTEXT ---\nCurrent UTC Datetime: {current_utc_datetime}\nUser's Timezone (IANA Format): {user_timezone}\nIMPORTANT TIME INSTRUCTIONS:\n1. When the user mentions a time (e.g., '2 PM', 'tomorrow morning'), you MUST interpret it in their timezone ('{user_timezone}').\n2. All timestamps you generate in the 'updated_user_state' (like for calendar events) must be converted to UTC and formatted as ISO 8601 strings (e.g., 'YYYY-MM-DDTHH:mm:ssZ').\n3. When creating a calendar event, the object in the `calendar_events` list MUST have these exact keys: `event_id` (a unique string), `title`, `description`, `start_time_utc`, and `end_time_utc`. Do NOT use keys like 'utc_start_time' or 'start_time'.\n\n--- CONVERSATION & STATE ---\nYour Previous Conversation with User:\n{chat_history}\n\nUser's Current Message:\n{current_user_message}\n\nYour Current Aigent State:\n{aigent_state}\n\nCurrent User State (example structure):\n{user_state}\n\n{system_persona_prompt}\n\n{available_tools}\n\nNow, carefully consider the user's request. Based on your personality and the tools you have, decide on your next action.\n\n{tool_use_instructions}\n\nPlease provide a structured JSON response. Ensure your entire output is a single valid JSON object.\nYour JSON response:"
     },
     {
       "name": "HTMLRenderer_v1",
@@ -48,7 +61,7 @@
       },
       "default_prompt_template_name": "StandardChatInteraction_v1",
       "request_timeout_seconds": 120,
-      "tool_names": ["web_search"]
+      "tool_names": ["web_search", "manage_calendar"]
     },
     {
       "name": "HTMLlo",
@@ -88,7 +101,7 @@
       },
       "default_prompt_template_name": "PinkyRenderer_v1",
       "request_timeout_seconds": 120,
-      "tool_names": ["web_search"]
+      "tool_names": ["web_search", "manage_calendar"]
     }
   ]
 }

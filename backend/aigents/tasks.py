@@ -5,11 +5,12 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+import inspect
 
 from celery import shared_task
 from .models import Aigent, Prompt, ChatHistory
-from tools.models import Tool # Import for type hinting
-from tools import executor as tool_executor # Import our new tool executor
+from tools.models import Tool 
+from tools import executor as tool_executor 
 from django.contrib.auth import get_user_model
 from typing import List
 
@@ -17,7 +18,7 @@ User = get_user_model()
 app_logger = logging.getLogger('aigents')
 llm_logger = logging.getLogger('llm_logger')
 
-# --- NEW: Data Sanitization Helper ---
+# --- Data Sanitization Helper ---
 def _sanitize_calendar_events(events_list: list) -> list:
     """
     Cleans up calendar event data from an LLM.
@@ -32,17 +33,14 @@ def _sanitize_calendar_events(events_list: list) -> list:
         if not isinstance(event, dict):
             continue
 
-        # Correct the key names
         if 'utc_start_time' in event and 'start_time_utc' not in event:
             event['start_time_utc'] = event.pop('utc_start_time')
         if 'utc_end_time' in event and 'end_time_utc' not in event:
             event['end_time_utc'] = event.pop('utc_end_time')
 
-        # Remove local time keys if they exist, we only want UTC
         event.pop('start_time', None)
         event.pop('end_time', None)
 
-        # Ensure the essential keys are present before adding
         if 'start_time_utc' in event and 'end_time_utc' in event:
             sanitized_list.append(event)
         else:
@@ -52,7 +50,6 @@ def _sanitize_calendar_events(events_list: list) -> list:
 
 
 # --- Tool-Related Prompt Generation Helpers ---
-
 TOOL_USE_INSTRUCTIONS = """--- INSTRUCTIONS FOR YOUR RESPONSE ---
 You have two choices for how to respond:
 
@@ -75,7 +72,6 @@ def _generate_tools_text(tools: List[Tool]) -> str:
     
     tool_descriptions = []
     for i, tool in enumerate(tools, 1):
-        # Format the parameters schema for better readability
         params_str = json.dumps(tool.parameters_schema)
         description = (
             f"{i}. Tool Name: `{tool.name}`\n"
@@ -91,8 +87,7 @@ def _generate_tools_text(tools: List[Tool]) -> str:
         "\n---"
     )
 
-# --- Existing Helper Functions (Mostly unchanged) ---
-
+# --- Existing Helper Functions ---
 def extract_json_from_text(text: str) -> str:
     match = re.search(r'\{.*\}|\[.*\]', text, re.DOTALL)
     if match:
@@ -120,7 +115,6 @@ def get_required_objects_wrapper(user_id: int):
         app_logger.error(f"User with id {user_id} not found.")
         raise
     
-    # Use prefetch_related for the ManyToMany 'tools' field for efficiency
     active_aigent = Aigent.objects.filter(is_active=True).select_related('default_prompt_template').prefetch_related('tools').first()
     if not active_aigent:
         app_logger.error("No active Aigent found.")
@@ -168,16 +162,13 @@ def update_chat_history_wrapper(user, aigent, user_message_content, answer_to_us
 def update_states_wrapper(user, aigent, new_user_state, new_aigent_state):
     try:
         if isinstance(new_user_state, dict):
-            # --- MODIFIED: Sanitize calendar events before assigning to user ---
             if 'calendar_events' in new_user_state:
                 new_user_state['calendar_events'] = _sanitize_calendar_events(new_user_state['calendar_events'])
             user.user_state = new_user_state
-            # Don't save user here, it will be saved after potential timezone update
         if isinstance(new_aigent_state, dict):
             aigent.aigent_state = new_aigent_state
             aigent.save(update_fields=['aigent_state'])
         
-        # Save the user model last, after all potential updates are applied.
         user.save()
         app_logger.info(f"Updated states for user {user.id} and aigent {aigent.id}")
 
@@ -185,7 +176,7 @@ def update_states_wrapper(user, aigent, new_user_state, new_aigent_state):
         app_logger.error(f"Failed to update states in wrapper: {str(e)}", exc_info=True)
         raise
 
-# --- Main Celery Task (Fully Refactored with Reasoning Loop) ---
+# --- Main Celery Task ---
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def process_user_message_to_aigent(self, user_id: int, user_message_content: str):
     task_id = self.request.id
@@ -206,7 +197,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
 
         prompt_placeholders = {
             "current_utc_datetime": datetime.now(timezone.utc).isoformat(),
-            "user_timezone": user.timezone, # <-- NEW
+            "user_timezone": user.timezone,
             "system_persona_prompt": active_aigent.system_persona_prompt,
             "user_state": user_state_str,
             "chat_history": formatted_chat_history_str,
@@ -216,7 +207,6 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             "tool_use_instructions": instructions_text_block,
         }
         
-        # This will now correctly format the prompt without a KeyError
         decider_prompt = prompt_template_obj.template_str.format(**prompt_placeholders)
         llm_logger.info(f"--- LLM DECIDER PROMPT (Task: {task_id}) ---\n{decider_prompt}\n---")
 
@@ -240,8 +230,16 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             tool_params = structured_decider_output.get("parameters", {})
             app_logger.info(f"Task {task_id}: Aigent chose to use tool '{tool_name}' with params: {tool_params}")
 
-            # Execute the tool and get the results
-            tool_observation_results = asyncio.run(tool_executor.execute_tool(tool_name, tool_params))
+            # Automatically inject user_id if needed by the tool
+            tool_func = tool_executor.get_tool_function(tool_name)
+            if tool_func:
+                sig = inspect.signature(tool_func)
+                if 'user_id' in sig.parameters:
+                    tool_params['user_id'] = user_id
+                    app_logger.info(f"Task {task_id}: Injected user_id={user_id} into parameters for tool '{tool_name}'.")
+
+            # Execute the tool synchronously
+            tool_observation_results = tool_executor.execute_tool(tool_name, tool_params)
             llm_logger.info(f"--- TOOL RESULTS (Task: {task_id}) ---\n{tool_observation_results}\n---")
 
             # SYNTHESIS PROMPT: Prepare and make the second LLM call
@@ -258,7 +256,7 @@ def process_user_message_to_aigent(self, user_id: int, user_message_content: str
             synthesis_prompt = synthesis_prompt_template.template_str.format(**synthesis_prompt_placeholders)
             llm_logger.info(f"--- LLM SYNTHESIS PROMPT (Task: {task_id}) ---\n{synthesis_prompt}\n---")
             
-            payload["prompt"] = synthesis_prompt # Reuse the payload, just change the prompt
+            payload["prompt"] = synthesis_prompt
             app_logger.info(f"Task {task_id}: Sending SYNTHESIS request to Ollama...")
             synthesis_response_data = asyncio.run(make_ollama_request(ollama_api_url, payload, active_aigent.request_timeout_seconds))
             synthesis_raw_output = synthesis_response_data.get("response", "")

@@ -142,7 +142,8 @@ async function setupPage() {
                 if (messageText) {
                     appendMessageToChat('user', messageText);
                     messageInput.value = '';
-                    await sendMessageToAigent(messageText);
+                    // Pass the user ID to the send message function
+                    await sendMessageToAigent(messageText, currentUser.id);
                 }
             });
         }
@@ -280,56 +281,59 @@ function switchTab(event) {
     document.getElementById(tabId).classList.add('active');
 
     // Special handling for calendar tab
-    if (tabId === 'calendar' && !calendarRendered) {
-        renderCalendar();
-        calendarRendered = true; // Set flag to prevent re-rendering
+    if (tabId === 'calendar') {
+        renderCalendar(); // Always re-render calendar on tab click to ensure it's fresh
     }
 }
 
 
-// --- NEW: CALENDAR RENDERING ---
-function renderCalendar() {
+// --- UPDATED: CALENDAR RENDERING ---
+async function renderCalendar() {
     const container = document.getElementById('calendar-events-container');
     if (!container) return;
 
-    container.innerHTML = ''; // Clear previous content
+    container.innerHTML = '<em>Loading events...</em>'; // Show loading state
 
-    const events = currentUser?.user_state?.calendar_events;
+    try {
+        const events = await apiFetch('/api/v1/calendar/events/');
+        container.innerHTML = ''; // Clear loading state
 
-    if (!events || events.length === 0) {
-        container.innerHTML = `<div class="no-events-message">No calendar events found.</div>`;
-        return;
+        if (!events || events.length === 0) {
+            container.innerHTML = `<div class="no-events-message">No calendar events found.</div>`;
+            return;
+        }
+        
+        const eventsList = document.createElement('div');
+        eventsList.id = 'calendar-events';
+        
+        // No need to sort, API should return them ordered
+        events.forEach(event => {
+            const eventItem = document.createElement('div');
+            eventItem.className = 'calendar-event-item';
+
+            const title = document.createElement('h3');
+            title.textContent = event.title || 'Untitled Event';
+            
+            const time = document.createElement('div');
+            time.className = 'event-time';
+            // This correctly displays the UTC time in the user's local browser timezone
+            const startTime = new Date(event.start_time).toLocaleString();
+            const endTime = new Date(event.end_time).toLocaleString();
+            time.textContent = `${startTime} - ${endTime}`;
+
+            const description = document.createElement('p');
+            description.className = 'event-description';
+            description.textContent = event.description || 'No description provided.';
+            
+            eventItem.append(title, time, description);
+            eventsList.appendChild(eventItem);
+        });
+        
+        container.appendChild(eventsList);
+
+    } catch (error) {
+        container.innerHTML = `<div class="no-events-message error">Failed to load calendar events: ${error.message}</div>`;
     }
-    
-    const eventsList = document.createElement('div');
-    eventsList.id = 'calendar-events';
-    
-    // Sort events by start time before rendering
-    const sortedEvents = [...events].sort((a, b) => new Date(a.start_time_utc) - new Date(b.start_time_utc));
-
-    sortedEvents.forEach(event => {
-        const eventItem = document.createElement('div');
-        eventItem.className = 'calendar-event-item';
-
-        const title = document.createElement('h3');
-        title.textContent = event.title || 'Untitled Event';
-        
-        const time = document.createElement('div');
-        time.className = 'event-time';
-        // This correctly displays the UTC time in the user's local browser timezone
-        const startTime = new Date(event.start_time_utc).toLocaleString();
-        const endTime = new Date(event.end_time_utc).toLocaleString();
-        time.textContent = `${startTime} - ${endTime}`;
-
-        const description = document.createElement('p');
-        description.className = 'event-description';
-        description.textContent = event.description || 'No description provided.';
-        
-        eventItem.append(title, time, description);
-        eventsList.appendChild(eventItem);
-    });
-    
-    container.appendChild(eventsList);
 }
 
 
@@ -408,7 +412,7 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     }
 }
 
-async function sendMessageToAigent(messageText) {
+async function sendMessageToAigent(messageText, userId) { // Pass user ID
     const typingIndicator = document.getElementById('typingIndicator');
     const chatWindow = document.getElementById('chatWindow');
 
@@ -416,12 +420,13 @@ async function sendMessageToAigent(messageText) {
     if (chatWindow) scrollToBottom(chatWindow);
 
     try {
+        // The celery task gets the user ID from the Django request now, so no need to send it.
         const taskData = await apiFetch('/api/v1/chat/send_message/', {
             method: 'POST',
             body: JSON.stringify({ message: messageText })
         });
         if (taskData && taskData.task_id) {
-            pollTaskStatus(taskData.task_id);
+            pollTaskStatus(taskData.task_id, userId); // Pass user ID to poller
         } else {
             throw new Error("No task_id received from the server.");
         }
@@ -431,7 +436,7 @@ async function sendMessageToAigent(messageText) {
     }
 }
 
-async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
+async function pollTaskStatus(taskId, userId, retries = 20, interval = 3000) { // Receive userId
     const typingIndicator = document.getElementById('typingIndicator');
     try {
         const data = await apiFetch(`/api/v1/chat/task_status/${taskId}/`);
@@ -441,13 +446,12 @@ async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
             if (typingIndicator) typingIndicator.style.display = 'none';
             if (data.result && data.result.answer_to_user) {
                 appendMessageToChat('aigent', data.result.answer_to_user, new Date().toISOString());
-                // After a successful response that might have updated the state, refresh user data
-                // and re-render the calendar if it's visible.
-                const updatedUser = await apiFetch('/api/v1/auth/me/');
-                currentUser = updatedUser;
+
+                // After a tool might have run, refresh the calendar if it's the active tab
                 if (document.getElementById('calendar').classList.contains('active')) {
                     renderCalendar();
                 }
+
             } else {
                 appendMessageToChat('system', 'Aigent responded but the answer was unclear.', new Date().toISOString(), true, 'error');
             }
@@ -459,7 +463,7 @@ async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
                 if (data.status === 'RETRY') {
                     appendMessageToChat('system', `Aigent is retrying...`, new Date().toISOString(), true, 'info');
                 }
-                setTimeout(() => pollTaskStatus(taskId, retries - 1, interval), interval);
+                setTimeout(() => pollTaskStatus(taskId, userId, retries - 1, interval), interval);
             } else {
                 if (typingIndicator) typingIndicator.style.display = 'none';
                 appendMessageToChat('system', 'Aigent processing timed out.', new Date().toISOString(), true, 'error');
