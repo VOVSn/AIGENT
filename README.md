@@ -25,7 +25,7 @@ The core idea is to enable different "Aigents" with unique personalities, instru
 *   **LLM Integration**: Ollama
 *   **Async Task Queue**: Celery, RabbitMQ (as a message broker), Redis (as a result backend)
 *   **Infrastructure**: Docker, Docker Compose
-*   **WSGI Server**: Gunicorn (for production, currently using Django dev server)
+*   **WSGI Server**: Gunicorn (for production)
 
 ## 📁 Project Structure
 
