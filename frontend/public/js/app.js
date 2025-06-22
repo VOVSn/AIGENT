@@ -9,8 +9,12 @@ let currentAigent = {
 };
 // Stores information about the logged-in user
 let currentUser = {
-    username: 'Guest'
+    username: 'Guest',
+    user_state: {},
+    timezone: 'UTC'
 };
+let calendarRendered = false; // Flag to check if calendar has been rendered once
+
 
 // --- THEME MANAGEMENT ---
 const THEMES = ['light', 'dark', 'memphis'];
@@ -115,14 +119,18 @@ async function setupPage() {
     // Fetch current user data and then set up the rest of the page
     try {
         const user = await apiFetch('/api/v1/auth/me/');
-        currentUser = user;
+        currentUser = user; // Store the full user object, including user_state
         const usernameDisplayEl = document.getElementById('usernameDisplay');
         if (usernameDisplayEl) {
             usernameDisplayEl.textContent = currentUser.username;
         }
 
+        // --- NEW: Timezone Synchronization ---
+        await syncUserTimezone();
+
         // Once user is confirmed, proceed with page setup
         await populateAigentSelector();
+        initializeTabs(); // NEW: Set up tab functionality
         loadChatHistory();
 
         const messageForm = document.getElementById('messageForm');
@@ -134,13 +142,38 @@ async function setupPage() {
                 if (messageText) {
                     appendMessageToChat('user', messageText);
                     messageInput.value = '';
-                    await sendMessageToAigent(messageText);
+                    // Pass the user ID to the send message function
+                    await sendMessageToAigent(messageText, currentUser.id);
                 }
             });
         }
     } catch (error) {
         console.error("Failed to set up page, likely auth issue.", error);
         logout();
+    }
+}
+
+// --- NEW: Timezone Synchronization Function ---
+async function syncUserTimezone() {
+    try {
+        // Get browser's IANA timezone name
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        // If the browser's timezone is different from what's stored, update the backend
+        if (currentUser.timezone !== browserTimezone) {
+            console.log(`Timezone mismatch. Stored: ${currentUser.timezone}, Browser: ${browserTimezone}. Updating...`);
+            const updatedUser = await apiFetch('/api/v1/auth/me/', {
+                method: 'PATCH',
+                body: JSON.stringify({ timezone: browserTimezone })
+            });
+            // Update the global user object with the fresh data from the server
+            currentUser = updatedUser;
+            console.log(`Timezone updated successfully to ${currentUser.timezone}`);
+        }
+    } catch (error) {
+        console.error("Failed to sync user timezone:", error);
+        // This is not a critical failure, so we don't need to log out.
+        // The aigent will just use the last known timezone or the default 'UTC'.
     }
 }
 
@@ -227,6 +260,83 @@ async function handleAigentSwitch(event) {
 }
 
 
+// --- NEW: TAB MANAGEMENT ---
+function initializeTabs() {
+    const tabLinks = document.querySelectorAll('.tab-link');
+    tabLinks.forEach(link => {
+        link.addEventListener('click', switchTab);
+    });
+}
+
+function switchTab(event) {
+    const clickedTab = event.currentTarget;
+    const tabId = clickedTab.dataset.tab;
+
+    // Remove active state from all tabs and panes
+    document.querySelectorAll('.tab-link').forEach(link => link.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+    // Add active state to the clicked tab and corresponding pane
+    clickedTab.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+
+    // Special handling for calendar tab
+    if (tabId === 'calendar') {
+        renderCalendar(); // Always re-render calendar on tab click to ensure it's fresh
+    }
+}
+
+
+// --- UPDATED: CALENDAR RENDERING ---
+async function renderCalendar() {
+    const container = document.getElementById('calendar-events-container');
+    if (!container) return;
+
+    container.innerHTML = '<em>Loading events...</em>'; // Show loading state
+
+    try {
+        const events = await apiFetch('/api/v1/calendar/events/');
+        container.innerHTML = ''; // Clear loading state
+
+        if (!events || events.length === 0) {
+            container.innerHTML = `<div class="no-events-message">No calendar events found.</div>`;
+            return;
+        }
+        
+        const eventsList = document.createElement('div');
+        eventsList.id = 'calendar-events';
+        
+        // No need to sort, API should return them ordered
+        events.forEach(event => {
+            const eventItem = document.createElement('div');
+            eventItem.className = 'calendar-event-item';
+
+            const title = document.createElement('h3');
+            title.textContent = event.title || 'Untitled Event';
+            
+            const time = document.createElement('div');
+            time.className = 'event-time';
+            // This correctly displays the UTC time in the user's local browser timezone
+            const startTime = new Date(event.start_time).toLocaleString();
+            const endTime = new Date(event.end_time).toLocaleString();
+            time.textContent = `${startTime} - ${endTime}`;
+
+            const description = document.createElement('p');
+            description.className = 'event-description';
+            description.textContent = event.description || 'No description provided.';
+            
+            eventItem.append(title, time, description);
+            eventsList.appendChild(eventItem);
+        });
+        
+        container.appendChild(eventsList);
+
+    } catch (error) {
+        container.innerHTML = `<div class="no-events-message error">Failed to load calendar events: ${error.message}</div>`;
+    }
+}
+
+
 // --- CHAT MESSAGE HANDLING ---
 
 async function loadChatHistory() {
@@ -302,7 +412,7 @@ function appendMessageToChat(role, text, timestamp, doScroll = true, type = 'nor
     }
 }
 
-async function sendMessageToAigent(messageText) {
+async function sendMessageToAigent(messageText, userId) { // Pass user ID
     const typingIndicator = document.getElementById('typingIndicator');
     const chatWindow = document.getElementById('chatWindow');
 
@@ -310,12 +420,13 @@ async function sendMessageToAigent(messageText) {
     if (chatWindow) scrollToBottom(chatWindow);
 
     try {
+        // The celery task gets the user ID from the Django request now, so no need to send it.
         const taskData = await apiFetch('/api/v1/chat/send_message/', {
             method: 'POST',
             body: JSON.stringify({ message: messageText })
         });
         if (taskData && taskData.task_id) {
-            pollTaskStatus(taskData.task_id);
+            pollTaskStatus(taskData.task_id, userId); // Pass user ID to poller
         } else {
             throw new Error("No task_id received from the server.");
         }
@@ -325,7 +436,7 @@ async function sendMessageToAigent(messageText) {
     }
 }
 
-async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
+async function pollTaskStatus(taskId, userId, retries = 20, interval = 3000) { // Receive userId
     const typingIndicator = document.getElementById('typingIndicator');
     try {
         const data = await apiFetch(`/api/v1/chat/task_status/${taskId}/`);
@@ -335,6 +446,12 @@ async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
             if (typingIndicator) typingIndicator.style.display = 'none';
             if (data.result && data.result.answer_to_user) {
                 appendMessageToChat('aigent', data.result.answer_to_user, new Date().toISOString());
+
+                // After a tool might have run, refresh the calendar if it's the active tab
+                if (document.getElementById('calendar').classList.contains('active')) {
+                    renderCalendar();
+                }
+
             } else {
                 appendMessageToChat('system', 'Aigent responded but the answer was unclear.', new Date().toISOString(), true, 'error');
             }
@@ -346,7 +463,7 @@ async function pollTaskStatus(taskId, retries = 20, interval = 3000) {
                 if (data.status === 'RETRY') {
                     appendMessageToChat('system', `Aigent is retrying...`, new Date().toISOString(), true, 'info');
                 }
-                setTimeout(() => pollTaskStatus(taskId, retries - 1, interval), interval);
+                setTimeout(() => pollTaskStatus(taskId, userId, retries - 1, interval), interval);
             } else {
                 if (typingIndicator) typingIndicator.style.display = 'none';
                 appendMessageToChat('system', 'Aigent processing timed out.', new Date().toISOString(), true, 'error');

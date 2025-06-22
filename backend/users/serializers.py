@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from .models import CalendarEvent # <-- NEW IMPORT
 
 User = get_user_model()
 
@@ -9,7 +10,16 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'user_state', 'timezone')
+        extra_kwargs = {
+            'timezone': {'required': False}
+        }
+
+# --- NEW SERIALIZER ---
+class CalendarEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarEvent
+        fields = ('id', 'title', 'description', 'start_time', 'end_time')
 
 
 class PasswordChangeSerializer(serializers.Serializer):
@@ -27,11 +37,9 @@ class PasswordChangeSerializer(serializers.Serializer):
         if data['new_password1'] != data['new_password2']:
             raise serializers.ValidationError({"new_password2": "The two password fields didn't match."})
 
-        # Validate the new password against Django's password validators
         try:
             validate_password(data['new_password1'], self.context['request'].user)
         except DjangoValidationError as e:
-            # Raise DRF's ValidationError to integrate with DRF's error handling
             raise serializers.ValidationError({"new_password1": list(e.messages)})
 
         return data

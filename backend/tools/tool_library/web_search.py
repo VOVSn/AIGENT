@@ -9,19 +9,17 @@ logger = logging.getLogger(__name__)
 # The internal URL for the searxng service from within the Docker network
 SEARXNG_INTERNAL_URL = os.environ.get("SEARXNG_URL", "http://searxng:8080")
 
-async def run(params: dict) -> str:
+async def search_web(query: str, **kwargs) -> str: # Renamed from run(params) to match registry
     """
     Executes a web search using the searxng service and returns a
     formatted string of results for an LLM to process.
     
     Args:
-        params (dict): A dictionary containing the search parameters. 
-                       Expected key: 'query'.
+        query (str): The specific search query string.
 
     Returns:
         str: A formatted string of search results or an error message.
     """
-    query = params.get("query")
     if not query:
         return "Error: No search query was provided to the web_search tool."
 
@@ -36,7 +34,7 @@ async def run(params: dict) -> str:
     logger.info(f"Executing web_search tool with query: '{query}'")
 
     try:
-        # Use an async client to make the request non-blocking for Celery
+        # Use an async client to make the request non-blocking
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(search_url, params=search_params)
             

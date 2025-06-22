@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from users.views import CalendarEventListView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -15,4 +16,5 @@ urlpatterns = [
     path('api/v1/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/auth/', include('users.urls', namespace='users_api')),
     path('api/v1/', include('aigents.urls', namespace='aigents_api')),
+    path('api/v1/calendar/events/', CalendarEventListView.as_view(), name='calendar_events_list'),
 ]

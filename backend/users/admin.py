@@ -1,42 +1,85 @@
-from django.contrib import admin
+# backend/users/admin.py
+
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 import json
-from .models import User
+from .models import User, get_default_user_state, CalendarEvent # <-- IMPORT CalendarEvent
 
+# --- NEW: Admin configuration for CalendarEvent model ---
+@admin.register(CalendarEvent)
+class CalendarEventAdmin(admin.ModelAdmin):
+    """
+    Admin view for Calendar Events.
+    """
+    list_display = ('title', 'user', 'start_time', 'end_time', 'created_at')
+    list_filter = ('user', 'start_time')
+    search_fields = ('title', 'description', 'user__username')
+    
+    # Define the fields to be displayed in the form, in order
+    fields = ('user', 'title', 'description', 'start_time', 'end_time')
+    
+    # Make foreign key 'user' searchable instead of a dropdown for performance
+    raw_id_fields = ('user',)
+
+
+    
 # To display the custom 'user_state' field in the admin.
 class UserAdmin(BaseUserAdmin):
-    # UPDATED: Replaced raw user_state with a pretty display
     
-    # NEW: Added our custom method to readonly_fields
-    readonly_fields = BaseUserAdmin.readonly_fields + ('user_state_display',)
-    
-    # UPDATED: Modified fieldsets to use the pretty display method
+    # --- NEW: Define the custom admin action ---
+    actions = ['reset_user_state']
+
+    # --- UPDATED: Show both the editable field and the pretty display ---
     fieldsets = BaseUserAdmin.fieldsets + (
-        ('Custom Fields', {'fields': ('user_state_display',)}),
+        ('Custom Fields', {'fields': ('user_state', 'user_state_display', 'timezone')}),
     )
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        # Note: add_fieldsets still uses the raw field, which is fine for creation.
-        # The pretty display is most useful on the change form.
-        ('Custom Fields', {'fields': ('user_state',)}),
+        ('Custom Fields', {'fields': ('user_state', 'timezone')}),
     )
+
+    # --- UPDATED: Make the pretty display a readonly field ---
+    readonly_fields = BaseUserAdmin.readonly_fields + ('user_state_display',)
+    
     list_display = BaseUserAdmin.list_display + ('user_state_summary',)
 
     def user_state_summary(self, obj):
-        if obj.user_state:
-            return f"{len(obj.user_state)} keys" if isinstance(obj.user_state, dict) else "Populated"
+        # Your existing summary function is great, no changes needed.
+        if isinstance(obj.user_state, dict) and obj.user_state:
+            default_state = get_default_user_state()
+            if obj.user_state == default_state:
+                return "Default"
+            return f"Custom ({len(obj.user_state['calendar_events'])} events)"
         return "Empty"
     user_state_summary.short_description = 'User State'
 
-    # NEW: Method to render the user_state JSON beautifully
     def user_state_display(self, obj):
         """Creates a pretty-printed, read-only view of the JSON state."""
         if obj.user_state:
             formatted_json = json.dumps(obj.user_state, indent=2)
-            # Wrap in <pre> tags to preserve formatting
             return format_html("<pre>{}</pre>", formatted_json)
         return "State is empty."
-    user_state_display.short_description = 'Formatted User State'
+    user_state_display.short_description = 'Formatted User State (Read-Only)'
 
+    # --- NEW: The action method itself ---
+    @admin.action(description="Reset selected users' state to default")
+    def reset_user_state(self, request, queryset):
+        """
+        This action resets the user_state JSONField to its default value.
+        """
+        default_state = get_default_user_state()
+        
+        # Use update() for efficiency on a large number of objects
+        rows_updated = queryset.update(user_state=default_state)
+        
+        # Send a success message to the admin user
+        self.message_user(request, f"{rows_updated} user(s) had their state successfully reset to default.", messages.SUCCESS)
+
+
+# Unregister the default UserAdmin if it was registered, then register our custom one
+# This avoids potential conflicts. It's good practice but often not strictly necessary.
+# from django.contrib.auth.models import User as AuthUser
+# if admin.site.is_registered(AuthUser):
+#     admin.site.unregister(AuthUser)
 
 admin.site.register(User, UserAdmin)
