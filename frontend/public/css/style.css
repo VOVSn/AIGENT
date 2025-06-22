@@ -87,7 +87,7 @@ html[data-theme="memphis"] {
 * { box-sizing: border-box; }
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: var(--bg-secondary); color: var(--text-primary); display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding-top: 20px; transition: background-color 0.3s, color 0.3s; }
 .container { background-color: var(--bg-primary); padding: 25px 30px; border-radius: 8px; box-shadow: 0 2px 4px var(--shadow-color), 0 8px 16px var(--shadow-color); width: 90%; max-width: var(--container-max-width); transition: background-color 0.3s, border 0.3s, box-shadow 0.3s; position: relative; }
-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
 h1, h2 { color: var(--accent-primary); margin-bottom: 20px; }
 h1 { text-align: center; font-size: 1.8em; }
 h2 { font-size: 1.4em; }
@@ -95,6 +95,38 @@ h2 { font-size: 1.4em; }
 .user-info #usernameDisplay { font-weight: 600; }
 .theme-toggle-button { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 50%; width: 40px; height: 40px; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: transform 0.2s ease, background-color 0.2s, color 0.2s; }
 .theme-toggle-button:hover { transform: scale(1.1); background-color: var(--bg-secondary); color: var(--text-primary); }
+
+/* --- NEW: Tab Navigation Styles --- */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+.tab-link {
+    padding: 10px 20px;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 1em;
+    font-weight: 600;
+    margin-bottom: -1px; /* Overlap the container's border */
+    transition: color 0.2s, border-color 0.2s;
+}
+.tab-link:hover {
+    color: var(--text-primary);
+}
+.tab-link.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+}
+.tab-pane {
+    display: none;
+}
+.tab-pane.active {
+    display: block;
+}
 
 /* --- Settings Menu Styles --- */
 .settings-menu-container { position: relative; }
@@ -323,6 +355,45 @@ html[data-theme="memphis"] .widget-restore-btn:active {
 }
 
 /* --- END WIDGET STYLES --- */
+
+/* --- NEW: Calendar View Styles --- */
+#calendar-events {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 5px;
+}
+.calendar-event-item {
+    background-color: var(--bg-secondary);
+    border-left: 5px solid var(--accent-primary);
+    padding: 15px 20px;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px var(--shadow-color);
+}
+.calendar-event-item h3 {
+    margin: 0 0 5px 0;
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+.calendar-event-item .event-time {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+.calendar-event-item .event-description {
+    font-size: 0.95em;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+.no-events-message {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
 
 #messageForm { display: flex; margin-bottom: 20px; }
 #messageForm #messageInput { flex-grow: 1; border-radius: 18px 0 0 18px; padding-left: 15px; margin-right: -1px; }

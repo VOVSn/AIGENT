@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LBA Chat</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <title>LBA</title>
+    <link rel="stylesheet" href="/css/style.css">
     
     <!-- Markdown processing libraries -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
@@ -19,9 +18,15 @@
 <body>
     <div class="container">
         <header>
-            <h1>LBA Chat</h1>
+            <h1>LBA</h1>
             <div class="user-info">
+                <!-- User display -->
                 <span>User: <strong id="usernameDisplay"></strong></span>
+                
+                <!-- NEW: Aigent display -->
+                <span class="aigent-display" style="border-left: 1px solid var(--border-color); padding-left: 15px;">
+                    Aigent: <strong id="aigentNameDisplay">Loading...</strong>
+                </span>
                 
                 <div class="settings-menu-container">
                     <button id="settings-menu-btn" class="theme-toggle-button" title="Settings">
@@ -44,27 +49,54 @@
                                 <button class="theme-choice-btn" data-theme-set="memphis">Memphis</button>
                             </div>
                         </div>
-                        <a href="{% url 'password_change_page' %}" class="settings-link">Change Password</a>
+                        <a href="/password-change.html" class="settings-link">Change Password</a>
                         <button id="clearHistoryBtn" class="settings-link settings-link-destructive">Clear History</button>
                         <button id="logoutButton" class="settings-link">Logout</button>
                     </div>
                 </div>
             </div>
         </header>
-        
-        <div id="chatWindow">
-            <div id="chatMessages">
-                <!-- Messages will be appended here -->
-            </div>
-            <div id="typingIndicator" style="display:none;"><em>Aigent is typing...</em></div>
-        </div>
 
-        <form id="messageForm">
-            <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" required>
-            <button type="submit">Send</button>
-        </form>
+        <!-- NEW: Tab Navigation -->
+        <nav class="tabs">
+            <button class="tab-link active" data-tab="chat">Chat</button>
+            <button class="tab-link" data-tab="calendar">Calendar</button>
+            <button class="tab-link" data-tab="docs">Docs</button>
+        </nav>
+
+        <!-- NEW: Tab Content Area -->
+        <main id="tab-content">
+            <!-- Chat Tab -->
+            <div id="chat" class="tab-pane active">
+                <div id="chatWindow">
+                    <div id="chatMessages">
+                        <!-- Messages will be appended here -->
+                    </div>
+                    <div id="typingIndicator" style="display:none;"><em>Aigent is typing...</em></div>
+                </div>
+                <form id="messageForm">
+                    <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" required>
+                    <button type="submit">Send</button>
+                </form>
+            </div>
+
+            <!-- Calendar Tab -->
+            <div id="calendar" class="tab-pane">
+                <h2>My Calendar</h2>
+                <div id="calendar-events-container">
+                    <!-- Calendar events will be rendered here by JS -->
+                </div>
+            </div>
+
+            <!-- Docs Tab -->
+            <div id="docs" class="tab-pane">
+                <h2>Documents</h2>
+                <p>Document management and RAG functionality will be available here soon.</p>
+            </div>
+        </main>
+        
     </div>
 
-    <script src="{% static 'js/app.js' %}"></script>
+    <script src="/js/app.js"></script>
 </body>
 </html>

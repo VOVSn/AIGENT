@@ -1,4 +1,118 @@
+# docker-compose.yml
 services:
+  #################################################
+  # NGINX - PUBLIC ENTRYPOINT & FRONTEND SERVER
+  #################################################
+  nginx:
+    build:
+      context: ./frontend
+    container_name: aigent_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend/public:/usr/share/nginx/html:ro
+      - ./nginx:/etc/nginx/conf.d:ro
+      - static_volume:/var/www/static:ro
+    depends_on:
+      - backend
+
+  #################################################
+  # BACKEND - DJANGO API (UVICORN)
+  #################################################
+  backend:
+    build: ./backend
+    container_name: aigent_backend
+    command: >
+      sh -c "
+        echo 'Backend container starting...' &&
+        echo 'Waiting for dependencies to be healthy...' &&
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput --clear &&
+        python manage.py seed_initial_data --overwrite &&
+        echo 'Starting Uvicorn server...' &&
+        uvicorn lba_project.asgi:application --host 0.0.0.0 --port 8000
+      "
+    volumes:
+      - ./backend:/app
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      searxng: # <-- ADDED
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/admin/login/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  #################################################
+  # CELERY WORKER & BEAT
+  #################################################
+  celery_worker:
+    build: ./backend
+    container_name: aigent_celery_worker
+    command: celery -A lba_project worker -l info -P gevent --concurrency=4
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      searxng: # <-- ADDED
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  celery_beat:
+    build: ./backend
+    container_name: aigent_celery_beat
+    command: celery -A lba_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+     - "host.docker.internal:host-gateway"
+
+  #################################################
+  # MONITORING & BACKING SERVICES
+  #################################################
+  flower:
+    image: mher/flower:2.0
+    container_name: aigent_flower
+    command: celery flower --broker=${CELERY_BROKER_URL} --basic_auth=${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+
   db:
     image: postgres:15-alpine
     container_name: aigent_postgres
@@ -50,103 +164,56 @@ services:
       retries: 5
       start_period: 10s
 
-  # --- MODIFIED backend SERVICE ---
-  backend:
-    build: ./backend
-    container_name: aigent_backend
-    command: >
-      sh -c "
-        echo 'Backend container starting...' &&
-        echo 'Waiting for PostgreSQL to be healthy...' &&
-        # The 'depends_on' with 'condition: service_healthy' for 'db'
-        # should ensure DB is ready, but an explicit wait can be added if needed.
-        # For example, using a wait-for-it.sh script.
-        # For now, relying on depends_on.
-
-        echo 'Applying database migrations...' &&
-        python manage.py migrate --noinput &&
-
-        echo 'Running initial data seeding...' &&
-        python manage.py seed_initial_data &&
-
-        echo 'Starting Django development server...' &&
-        python manage.py runserver 0.0.0.0:8000
-      "
+  #################################################
+  # NEW: SEARXNG SERVICE AND ITS REDIS
+  #################################################
+  searxng:
+    image: searxng/searxng:latest
+    container_name: aigent_searxng
+    hostname: searxng
     volumes:
-      - ./backend:/app
-      - ./app.log:/app/app.log
-      - ./error.log:/app/error.log
-      - ./llm_interaction.log:/app/llm_interaction.log
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_SECRET_KEY=${DJANGO_SECRET_KEY}
+    # No ports exposed to host by default, only internal access needed
+    # You can add - "8888:8080" to access its UI for debugging
     depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # For Linux hosts, to allow containers to reach Ollama on host.docker.internal:
-    # extra_hosts:
-    #  - "host.docker.internal:host-gateway"
-  # --- END OF MODIFIED backend SERVICE ---
+      - searxng_redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider --proxy=off http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
 
-  celery_worker:
-    build: ./backend
-    container_name: aigent_celery_worker
-    command: celery -A lba_project worker -l info -P gevent --concurrency=4
-    volumes:
-      - ./backend:/app
-      - ./app.log:/app/app.log
-      - ./error.log:/app/error.log
-      - ./llm_interaction.log:/app/llm_interaction.log
-    env_file:
-      - .env
-    depends_on:
-      backend: # Ensures migrations run (from backend service) before worker starts
-        condition: service_started # Changed to service_started as migrations are now part of backend's command
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # extra_hosts:
-    #  - "host.docker.internal:host-gateway"
+  searxng_redis:
+    image: redis:alpine
+    container_name: aigent_searxng_redis
+    hostname: searxng_redis
+    command: redis-server --save "" --appendonly "no"
+    tmpfs:
+      - /var/lib/redis
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-  celery_beat:
-    build: ./backend
-    container_name: aigent_celery_beat
-    command: celery -A lba_project beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    volumes:
-      - ./backend:/app
-    env_file:
-      - .env
-    depends_on:
-      backend: # Ensures migrations run (from backend service) before beat starts
-        condition: service_started # Changed to service_started
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # extra_hosts:
-    #  - "host.docker.internal:host-gateway"
-
-  flower:
-    image: mher/flower:2.0
-    container_name: aigent_flower
-    command: celery flower --broker=${CELERY_BROKER_URL} --basic_auth=${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}
-    ports:
-      - "5555:5555"
-    env_file:
-      - .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      celery_worker:
-        condition: service_started
-
+#################################################
+# VOLUMES
+#################################################
 volumes:
   postgres_data:
   rabbitmq_data:
   redis_data:
+  static_volume:
+  searxng: {} # Added volume for searxng config

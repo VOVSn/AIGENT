@@ -1,0 +1,50 @@
+# SearXNG settings for AI agents
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "AIGENT Search"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "ThisWillBeOverriddenByEnvVar"
+  base_url: /
+  image_proxy: false
+  method: "POST"
+
+ui:
+  default_theme: simple
+  theme_args:
+    simple_style: auto
+
+# Redis configuration (references the new redis service)
+redis:
+  url: redis://searxng_redis:6379/0
+
+# Enabled engines for AI agent searches
+engines:
+  - name: bing
+    engine: bing
+    disabled: false
+    timeout: 3.0
+  - name: google
+    engine: google
+    disabled: false
+    timeout: 3.0
+  - name: duckduckgo
+    engine: duckduckgo
+    disabled: false
+    timeout: 3.0
+  - name: wikipedia
+    engine: wikipedia
+    disabled: false
+    timeout: 3.0

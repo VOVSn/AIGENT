@@ -1,6 +1,8 @@
+# backend/aigents/models.py
 from django.db import models
 from django.conf import settings
-import uuid
+# Import the Tool model
+from tools.models import Tool
 
 User = settings.AUTH_USER_MODEL
 
@@ -24,7 +26,6 @@ def get_default_aigent_state():
 
 
 class Prompt(models.Model):
-    # ... (no changes to Prompt model)
     """
     Stores prompt templates that Aigents can use.
     """
@@ -43,18 +44,15 @@ class Prompt(models.Model):
         return self.name
 
 class Aigent(models.Model):
-    # ADDED: Choices for the new field
     PRESENTATION_FORMAT_CHOICES = [
         ('markdown', 'Markdown'),
         ('html', 'HTML'),
         ('raw', 'Raw Text'),
     ]
 
-    # ... (other fields are unchanged)
     name = models.CharField(max_length=255, unique=True, help_text="A unique name for this Aigent (e.g., 'LBA Support Aigent').")
     is_active = models.BooleanField(default=False, help_text="Designates whether this Aigent is the currently active one for general user interaction. Only one should be active at a time.")
     
-    # ADDED: The new presentation_format field
     presentation_format = models.CharField(
         max_length=10,
         choices=PRESENTATION_FORMAT_CHOICES,
@@ -76,6 +74,15 @@ class Aigent(models.Model):
     )
 
     default_prompt_template = models.ForeignKey(Prompt, on_delete=models.SET_NULL, null=True, blank=True, related_name='aigents', help_text="The primary prompt template this Aigent uses.")
+    
+    # --- NEW FIELD ---
+    tools = models.ManyToManyField(
+        Tool,
+        blank=True,
+        help_text="The set of tools this Aigent is allowed to use."
+    )
+    # --- END NEW FIELD ---
+
     request_timeout_seconds = models.IntegerField(default=60, help_text="Timeout in seconds for requests to the Ollama server.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -90,7 +97,6 @@ class Aigent(models.Model):
 
 
 class ChatHistory(models.Model):
-    # ... (no changes to ChatHistory model)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_histories')
     aigent = models.ForeignKey(Aigent, on_delete=models.CASCADE, related_name='chat_histories')
     history = models.JSONField(default=list, help_text="Stores chat messages: [{'role': 'user/assistant', 'content': '...', 'timestamp': '...'}, ...]")

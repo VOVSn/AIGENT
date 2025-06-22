@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LBA Login</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <title>aigent Login</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <div class="container">
@@ -36,7 +35,7 @@
         <p id="loginError" class="error-message" style="display:none;"></p>
     </div>
 
-    <script src="{% static 'js/app.js' %}"></script>
+    <script src="/js/app.js"></script>
     <script>
         // Inline script for login page functionality
         document.getElementById('loginForm').addEventListener('submit', async function(event) {
@@ -60,7 +59,7 @@
                     localStorage.setItem('accessToken', data.access);
                     localStorage.setItem('refreshToken', data.refresh);
                     localStorage.setItem('username', username);
-                    window.location.href = '/chat/';
+                    window.location.href = '/index.html';
                 } else {
                     let errorMessage = "Login failed. Please check your credentials.";
                     if (data.detail) {
